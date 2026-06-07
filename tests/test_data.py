@@ -16,3 +16,5 @@ def test_build_training_example_passes_image_prompt_and_label(fake_processor):
     assert call["text"] == config.TRANSCRIPTION_PROMPT
     # The label is supplied as `suffix` so PaliGemma's processor builds the loss labels.
     assert call["suffix"] == "the quick brown fox"
+    # PaliGemma must receive torch tensors ("pt"), not Python lists, or training fails.
+    assert call["return_tensors"] == "pt"

@@ -15,7 +15,7 @@ from typing import Any, Dict
 from . import config
 
 
-def load_iam_splits():
+def load_iam_splits() -> "DatasetDict":  # string annotation: avoids importing datasets at module load
     """Load the official IAM-line splits from the Hub.
 
     Imported lazily so importing this module on a minimal laptop (no `datasets`) is cheap
@@ -50,7 +50,7 @@ def build_training_example(record: Dict[str, Any], processor) -> Dict[str, Any]:
         The processor's encoded batch (input_ids/attention_mask/pixel_values/labels...).
     """
     return processor(
-        text=config.TRANSCRIPTION_PROMPT,  # the conditioning prompt prefix
+        text=build_prompt(),               # the conditioning prompt prefix (single source)
         images=record["image"],            # the handwriting line image
         suffix=record["text"],             # the ground truth -> becomes the labels
         return_tensors="pt",

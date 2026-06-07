@@ -22,7 +22,12 @@ class FakeProcessor:
 
     def __call__(self, text=None, images=None, suffix=None, return_tensors=None):
         # Record what we were asked to encode; return a minimal fake batch.
-        self.last_call = {"text": text, "images": images, "suffix": suffix}
+        self.last_call = {
+            "text": text,
+            "images": images,
+            "suffix": suffix,
+            "return_tensors": return_tensors,
+        }
         return FakeBatch(input_ids=[[1, 2, 3]])
 
     def decode(self, _token_ids, skip_special_tokens=True):
