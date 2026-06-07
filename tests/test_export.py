@@ -15,9 +15,23 @@ def test_adapter_and_merged_repo_ids_are_distinct():
 def test_push_model_calls_push_to_hub(monkeypatch):
     model = MagicMock()
     processor = MagicMock()
-    # Merging a PEFT model returns a plain model we then push.
-    model.merge_and_unload.return_value = MagicMock()
 
     export.push_adapter(model, processor, repo_id="user/repo-adapter")
     model.push_to_hub.assert_called_once_with("user/repo-adapter", private=True)
     processor.push_to_hub.assert_called_once_with("user/repo-adapter", private=True)
+
+
+def test_push_merged_merges_then_pushes():
+    model = MagicMock()
+    processor = MagicMock()
+    merged = MagicMock()
+    # merge_and_unload folds the adapter into the base and returns a plain model.
+    model.merge_and_unload.return_value = merged
+
+    export.push_merged(model, processor, repo_id="user/repo-merged")
+
+    # The MERGED model must be pushed, NOT the original PEFT-wrapped `model`.
+    model.merge_and_unload.assert_called_once()
+    merged.push_to_hub.assert_called_once_with("user/repo-merged", private=True)
+    model.push_to_hub.assert_not_called()
+    processor.push_to_hub.assert_called_once_with("user/repo-merged", private=True)
