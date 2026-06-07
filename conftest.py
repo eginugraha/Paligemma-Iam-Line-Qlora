@@ -6,4 +6,6 @@ from pathlib import Path
 
 # src/ sits next to this file; prepend it so the htr_sp1 package is importable.
 SRC = Path(__file__).parent / "src"
-sys.path.insert(0, str(SRC))
+# Guard against inserting the same path twice if conftest is loaded more than once.
+if str(SRC) not in sys.path:
+    sys.path.insert(0, str(SRC))
