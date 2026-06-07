@@ -21,3 +21,8 @@ def test_wer_one_wrong_word_of_four():
 def test_metrics_return_percentages_not_fractions():
     # We standardize on PERCENT (0–100) so UI/report numbers match the PRD example.
     assert metrics.cer("ab", "xy") == 100.0
+
+
+def test_wer_return_percentages_not_fractions():
+    # Guard the WER path against accidental loss of the *100 conversion (2 words, both wrong).
+    assert metrics.wer("alpha beta", "gamma delta") == 100.0

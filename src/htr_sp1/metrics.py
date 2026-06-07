@@ -34,4 +34,5 @@ def wer(reference: str, hypothesis: str) -> float:
     Returns:
         Edit distance over words / reference word count, times 100.
     """
+    # jiwer.wer returns a fraction; multiply by 100 for a human-readable percent.
     return jiwer.wer(reference, hypothesis) * 100.0
