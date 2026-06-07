@@ -31,7 +31,7 @@ TRANSCRIPTION_PROMPT = "transcribe the handwritten text\n"
 
 # Per-device batch of 1 keeps memory low; we recover effective batch size via accumulation.
 PER_DEVICE_TRAIN_BATCH_SIZE = 1
-GRAD_ACCUMULATION_STEPS = 8           # effective batch = 1 * 8 = 8
+GRAD_ACCUMULATION_STEPS = 8           # effective batch = PER_DEVICE_TRAIN_BATCH_SIZE * 8
 LEARNING_RATE = 2e-4                  # typical for LoRA adapters
 NUM_TRAIN_EPOCHS = 3
 MAX_TARGET_TOKENS = 64               # IAM lines are short; caps memory + generation length
@@ -66,7 +66,10 @@ def set_seed(seed: int = SEED) -> None:
         seed: The integer seed. Defaults to the module-level SEED.
     """
     random.seed(seed)
-    os.environ["PYTHONHASHSEED"] = str(seed)  # makes hash-based ordering deterministic too
+    # NOTE: setting this here only affects *child* processes, not the current interpreter
+    # (CPython reads PYTHONHASHSEED at startup). For fully deterministic hash ordering,
+    # launch with `PYTHONHASHSEED=<seed> python ...` in the shell.
+    os.environ["PYTHONHASHSEED"] = str(seed)
     try:  # numpy/torch are heavy and may be absent in a minimal test env — degrade gracefully.
         import numpy as np
 

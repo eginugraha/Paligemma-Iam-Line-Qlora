@@ -22,3 +22,16 @@ def test_set_seed_is_deterministic():
     config.set_seed(123)
     second = [random.random() for _ in range(3)]
     assert first == second
+
+
+def test_set_seed_numpy_deterministic():
+    # Reproducibility that actually matters for training comes from numpy/torch, not just
+    # Python's random. Skip cleanly on a minimal env where numpy isn't installed.
+    import pytest
+
+    np = pytest.importorskip("numpy")
+    config.set_seed(123)
+    first = np.random.rand(3).tolist()
+    config.set_seed(123)
+    second = np.random.rand(3).tolist()
+    assert first == second
