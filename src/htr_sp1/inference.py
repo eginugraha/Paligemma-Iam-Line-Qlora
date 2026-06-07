@@ -31,9 +31,15 @@ def generate_transcription(model, processor, image, max_new_tokens: int = config
     # `.to(...)` is a no-op on fakes; on a real run it moves tensors to the model's device.
     inputs = inputs.to(getattr(model, "device", "cpu"))
 
+    # PaliGemma's generate() returns the prompt tokens FOLLOWED BY the newly generated ones.
+    # Remember the prompt length so we can slice it off and keep ONLY the model's answer —
+    # otherwise the prompt would leak into the transcription and corrupt CER/WER downstream.
+    prompt_length = len(inputs["input_ids"][0])
+
     # Greedy decode (do_sample defaults False) for reproducible, deterministic transcriptions.
     generated_ids = model.generate(**inputs, max_new_tokens=max_new_tokens)
 
-    # Decode the first (only) sequence and strip padding/whitespace for clean metrics.
-    text = processor.decode(generated_ids[0], skip_special_tokens=True)
+    # Keep only the generated continuation (drop the prompt prefix), then decode + strip.
+    answer_ids = generated_ids[0][prompt_length:]
+    text = processor.decode(answer_ids, skip_special_tokens=True)
     return text.strip()
