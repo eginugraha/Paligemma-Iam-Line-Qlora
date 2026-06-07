@@ -73,6 +73,10 @@ def load_trainable_model():
     )
     # Required before adding LoRA on a quantized model: enables grad checkpointing etc.
     base = prepare_model_for_kbit_training(base)
+    # With gradient checkpointing on a 4-bit PEFT model, the backward pass otherwise fails
+    # with "element 0 of tensors does not require grad". This hook makes the (frozen) input
+    # embeddings' outputs require grad so checkpointed activations have a grad path.
+    base.enable_input_require_grads()
 
     lc = build_lora_config()
     lora = LoraConfig(

@@ -30,7 +30,8 @@ def build_training_args(output_dir: str) -> Dict[str, Any]:
         "gradient_checkpointing": True,   # memory-for-compute trade; needed on 16GB
         "fp16": True,                     # T4 (Turing) supports fp16, not bf16
         "save_strategy": "epoch",         # checkpoint every epoch -> resumable
-        "evaluation_strategy": "epoch",   # val metrics every epoch -> watch val-CER
+        "evaluation_strategy": "epoch",   # eval each epoch; live signal is eval LOSS (Trainer
+        # does not generate during eval), while true val/test CER is computed via evaluate_split.
         "logging_steps": 25,
         "report_to": "none",              # no external trackers; keep the thesis run simple
     }

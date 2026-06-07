@@ -40,7 +40,11 @@ MAX_TARGET_TOKENS = 64               # IAM lines are short; caps memory + genera
 LORA_R = 8
 LORA_ALPHA = 16
 LORA_DROPOUT = 0.05
-# Attention + projection layers PaliGemma's language model exposes for LoRA.
+# We adapt the language model's attention projections only (q/k/v/o_proj). We deliberately do
+# NOT LoRA-adapt the vision tower or the multimodal projector in this baseline: it keeps the
+# adapter small and avoids depending on exact internal module names that vary across
+# transformers versions (a wrong name hard-crashes model load). Adapting the projector is a
+# documented future lever for the thesis, not part of the baseline.
 LORA_TARGET_MODULES = ["q_proj", "k_proj", "v_proj", "o_proj"]
 
 # --- Paths (Colab: point OUTPUT_DIR at a mounted Drive folder to survive disconnects) ---
