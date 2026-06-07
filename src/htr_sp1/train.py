@@ -80,8 +80,16 @@ def run_training(model, processor, train_ds, eval_ds, output_dir: str):
     def collate(batch):
         # Encode each record (image + prompt + label suffix) and let the processor build
         # the padded tensors + masked labels. One example per record keeps memory predictable.
+        # NOTE: this collate is the one risky integration point — it is validated/adjusted at
+        # the Colab notebook's sanity-overfit gate (Task 9) against real PaliGemma batch shapes.
         examples = [build_training_example(r, processor) for r in batch]
-        return processor.tokenizer.pad(examples, return_tensors="pt") if hasattr(processor, "tokenizer") else examples[0]
+        if not hasattr(processor, "tokenizer"):
+            # Fail loudly at batch 0 rather than producing wrong shapes that crash mid-epoch.
+            raise TypeError(
+                "Expected a PaliGemmaProcessor with a `.tokenizer` for padding; "
+                f"got {type(processor).__name__} without one."
+            )
+        return processor.tokenizer.pad(examples, return_tensors="pt")
 
     args = TrainingArguments(**build_training_args(output_dir))
     trainer = Trainer(

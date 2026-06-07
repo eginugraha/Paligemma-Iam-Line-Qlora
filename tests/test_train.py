@@ -15,6 +15,10 @@ def test_training_args_fit_t4_and_checkpoint():
     assert args["save_strategy"] == "epoch"
     # Evaluate each epoch so we can watch val-CER and stop when it stabilizes.
     assert args["evaluation_strategy"] == "epoch"
+    # T4 (Turing) supports fp16, not bf16 — assert the documented hardware choice.
+    assert args["fp16"] is True
+    # No external experiment trackers — keep the thesis run self-contained.
+    assert args["report_to"] == "none"
 
 
 def test_find_resume_checkpoint_prefers_existing(tmp_path):
@@ -23,4 +27,8 @@ def test_find_resume_checkpoint_prefers_existing(tmp_path):
     # Create a checkpoint dir -> it should be returned so training resumes from it.
     ckpt = tmp_path / "checkpoint-100"
     ckpt.mkdir()
+    assert train.find_resume_checkpoint(str(tmp_path)) == str(ckpt)
+    # A LOWER step number created later must NOT win — guards against lexicographic sort
+    # (where "checkpoint-25" would wrongly beat "checkpoint-100").
+    (tmp_path / "checkpoint-25").mkdir()
     assert train.find_resume_checkpoint(str(tmp_path)) == str(ckpt)
