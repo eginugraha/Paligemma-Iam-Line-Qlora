@@ -18,6 +18,8 @@ def evaluate_split(records: Iterable[Dict[str, Any]], transcribe: Callable[[Any]
         records: Iterable of {"image", "text"} records (e.g. the IAM test split).
         transcribe: Function mapping an image to a predicted string. In Colab this is
             `lambda img: generate_transcription(model, processor, img)`; in tests it's a fake.
+            IMPORTANT: bind an ALREADY-LOADED model/processor in the closure — do NOT reload
+            the model inside this callable, or evaluation will be catastrophically slow.
 
     Returns:
         Dict with keys: mean_cer, mean_wer, num_samples, per_sample (list of row dicts).
@@ -37,7 +39,9 @@ def evaluate_split(records: Iterable[Dict[str, Any]], transcribe: Callable[[Any]
         )
 
     num = len(per_sample)
-    if num == 0:  # guard against an empty split so we never divide by zero.
+    # Guard against an empty split (e.g. a partial dataset download or a unit-test stub)
+    # so the mean computation below never divides by zero.
+    if num == 0:
         return {"mean_cer": 0.0, "mean_wer": 0.0, "num_samples": 0, "per_sample": []}
 
     return {
