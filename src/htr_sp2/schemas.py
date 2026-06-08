@@ -9,14 +9,18 @@ The /v1/detect endpoint emits one JSON object per line (newline-delimited JSON, 
 Each object has a mandatory ``"event"`` discriminator field. The sequence is:
 
     1. ``meta``   — one per request; announces filename and whether ground-truth is known.
-    2. ``result`` — one per scenario (up to four); carries text, metrics, and timing.
+    2. ``result`` — one per scenario (m1, m2 in this sub-project); carries text, metrics,
+       and timing.
        OR ``error`` — if that scenario failed; stream continues with remaining scenarios.
     3. ``done``   — exactly one, final line; signals the stream is closed.
 
 Consumers (SP-4 frontend, SP-5 batch evaluator) switch on ``event`` to route each line
 to the right handler. Using string discriminators rather than HTTP status codes lets us
-carry partial results: even if two of four scenarios fail, the client still receives the
-two successful results before the ``done`` line.
+carry partial results: even if one scenario fails, the client still receives the
+successful result before the ``done`` line.
+
+Note: SP-2 covers M1 (baseline) and M2 (chain-of-thought) only. RAG-augmented scenarios
+(M3) and CoT+RAG (M4) are scoped to future sub-projects and are not implemented here.
 
 Why plain dicts?
 -----------------
@@ -66,16 +70,16 @@ def result_event(
 ) -> dict:
     """Build a result event carrying one scenario's transcription and metrics.
 
-    Emitted once per successfully completed scenario. There are four scenarios
-    in the thesis comparison:
-      - Baseline (PaliGemma, no CoT)
-      - CoT (PaliGemma + chain-of-thought prompt)
-      - RAG (PaliGemma + pgvector retrieval)
-      - CoT+RAG (combined)
+    Emitted once per successfully completed scenario. SP-2 implements two scenarios:
+      - M1 — Baseline (PaliGemma, direct transcription prompt, no CoT)
+      - M2 — CoT (PaliGemma + chain-of-thought prompt)
+
+    The thesis comparison also includes RAG-augmented scenarios (M3) and CoT+RAG (M4),
+    but those are scoped to future sub-projects and are not part of this backend.
 
     Args:
-        model:            Short scenario identifier (e.g. ``"baseline"``,
-                          ``"cot"``, ``"rag"``, ``"cot_rag"``).
+        model:            Short scenario identifier (``"m1"`` or ``"m2"`` in
+                          this sub-project).
         text:             The raw transcription produced by the model.
         cer:              Character Error Rate as a percentage (0–100), or
                           ``None`` when no ground truth was supplied.

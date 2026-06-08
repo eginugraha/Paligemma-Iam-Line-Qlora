@@ -9,7 +9,7 @@ Architecture context (thesis):
 -------------------------------
 SP-2 compares four inference scenarios. For the PaliGemma-based scenarios (M1 and M2),
 the model runs on a GPU pod via RunPod Serverless. This engine is the client-side half of
-that bridge; the server-side handler lives in runpod/handler.py in the SP-1 package.
+that bridge; the server-side handler lives in runpod/handler.py at the repository root.
 
 The /runsync endpoint (as opposed to /run + /status polling) means the HTTP POST blocks
 until the job is done and the output is embedded in the response body. This keeps the

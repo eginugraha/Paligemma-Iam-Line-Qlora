@@ -25,8 +25,9 @@ NDJSON stream structure (one JSON object per line)
      OR ``error`` — one per failed scenario; the stream continues with the next scenario.
   3. ``done``   — final line; signals the stream is fully consumed.
 
-The generator pattern (yield) lets FastAPI (SP-3) wrap this in a ``StreamingResponse``
-without buffering all results in memory — important when later scenarios are added (RAG, etc.)
+The generator pattern (yield) lets FastAPI (api.py in this sub-project) wrap this in a
+``StreamingResponse`` without buffering all results in memory — important when later
+scenarios are added (RAG, etc.)
 """
 from __future__ import annotations
 
