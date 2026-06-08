@@ -25,10 +25,10 @@ Same pipeline as the notebook, runnable over SSH. Persistence comes from the mac
 disk (e.g. a RunPod Network Volume at `/workspace`), so there is **no Colab/Drive mounting**.
 
 ```bash
-git clone <repo> /workspace/htr && cd /workspace/htr
+git clone https://github.com/eginugraha/Paligemma-Iam-Line-Qlora.git /workspace/htr && cd /workspace/htr
 pip install -r requirements.txt
 export HTR_OUTPUT_DIR="/workspace/outputs"          # persistent dir for checkpoints
-export HTR_HUB_REPO_ID="your-hf-username/paligemma-iam-line-qlora"
+export HTR_HUB_REPO_ID="eginugraha/paligemma-iam-line-qlora"
 huggingface-cli login                               # token with write access
 
 python scripts/train_sp1.py                         # full pipeline; precision auto-detected

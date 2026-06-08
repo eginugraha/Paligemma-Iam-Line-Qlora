@@ -21,6 +21,14 @@ def test_training_args_fit_t4_and_checkpoint():
     assert args["report_to"] == "none"
 
 
+def test_training_args_keep_raw_columns_for_collate():
+    # Our collate() encodes the raw {image, text} columns itself. HF Trainer otherwise strips
+    # any column not in the model's forward signature BEFORE the collator runs, leaving empty
+    # batches. remove_unused_columns must be False so image/text reach collate.
+    args = train.build_training_args(output_dir="/tmp/run")
+    assert args["remove_unused_columns"] is False
+
+
 def test_training_args_default_is_fp16_not_bf16():
     # Default (no bf16 request) keeps the T4-safe baseline: fp16 on, bf16 off. HF errors if
     # both are True, so exactly one must be enabled.

@@ -32,6 +32,10 @@ def build_training_args(output_dir: str, *, bf16: bool = False) -> Dict[str, Any
         "gradient_accumulation_steps": config.GRAD_ACCUMULATION_STEPS,
         "learning_rate": config.LEARNING_RATE,
         "num_train_epochs": config.NUM_TRAIN_EPOCHS,
+        # Keep the raw {image, text} columns so our collate() can encode them. Without this,
+        # Trainer strips columns not in the model's forward signature BEFORE collation, leaving
+        # empty batches ("No columns ... match the model's forward method signature").
+        "remove_unused_columns": False,
         "gradient_checkpointing": True,   # memory-for-compute trade; needed on 16GB
         # Exactly one mixed-precision mode on — never both (HF raises if both are True).
         "fp16": not bf16,                 # T4 (Turing) supports fp16, not bf16
