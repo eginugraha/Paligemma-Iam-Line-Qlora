@@ -71,6 +71,37 @@ def find_resume_checkpoint(output_dir: str) -> Optional[str]:
     return max(checkpoints, key=lambda p: int(p.rsplit("-", 1)[-1]))
 
 
+def collate_examples(batch, processor):
+    """Turn a batch of {image, text} records into padded PaliGemma training inputs.
+
+    We call the processor ONCE on the whole batch — lists of prompts, RGB images, and the
+    ground-truth texts as `suffix`. The processor then builds batched, padded input_ids /
+    attention_mask / pixel_values AND the loss labels (prompt tokens masked, suffix kept)
+    natively.
+
+    Why not encode per-record then `tokenizer.pad`? That path leaves a leading [1, seq_len]
+    dim on every tensor (-> [batch, 1, seq_len] after stacking) and does NOT pad/stack the
+    image `pixel_values` at all. The model then receives 4-D hidden states and crashes with
+    "too many values to unpack (expected 3)". Batched processing is the idiomatic, correct fix.
+
+    Args:
+        batch: A list of records, each with "image" (PIL) and "text" (ground truth).
+        processor: A PaliGemmaProcessor (or compatible fake in tests).
+    """
+    from .data import build_prompt, ensure_rgb
+
+    images = [ensure_rgb(record["image"]) for record in batch]
+    prompts = [build_prompt() for _ in batch]
+    suffixes = [record["text"] for record in batch]
+    return processor(
+        text=prompts,
+        images=images,
+        suffix=suffixes,
+        return_tensors="pt",
+        padding="longest",
+    )
+
+
 def run_training(model, processor, train_ds, eval_ds, output_dir: str, *, bf16: bool = False):
     """Run the real fine-tuning loop on GPU, resuming if a checkpoint exists.
 
@@ -88,21 +119,10 @@ def run_training(model, processor, train_ds, eval_ds, output_dir: str, *, bf16: 
     """
     from transformers import Trainer, TrainingArguments
 
-    from .data import build_training_example
-
+    # Batched collation through the processor (see collate_examples for why per-record +
+    # tokenizer.pad is wrong). Bound to this run's processor.
     def collate(batch):
-        # Encode each record (image + prompt + label suffix) and let the processor build
-        # the padded tensors + masked labels. One example per record keeps memory predictable.
-        # NOTE: this collate is the one risky integration point — it is validated/adjusted at
-        # the Colab notebook's sanity-overfit gate (Task 9) against real PaliGemma batch shapes.
-        examples = [build_training_example(r, processor) for r in batch]
-        if not hasattr(processor, "tokenizer"):
-            # Fail loudly at batch 0 rather than producing wrong shapes that crash mid-epoch.
-            raise TypeError(
-                "Expected a PaliGemmaProcessor with a `.tokenizer` for padding; "
-                f"got {type(processor).__name__} without one."
-            )
-        return processor.tokenizer.pad(examples, return_tensors="pt")
+        return collate_examples(batch, processor)
 
     args = TrainingArguments(**build_training_args(output_dir, bf16=bf16))
     trainer = Trainer(

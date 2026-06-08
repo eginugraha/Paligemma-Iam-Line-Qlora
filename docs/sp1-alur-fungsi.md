@@ -190,13 +190,18 @@ Urutan internal di dalam `run_training()`:
    - `num_train_epochs=3`, `learning_rate=2e-4`
    - `gradient_checkpointing=True`, `fp16=True` (tukar memori demi muat di 16GB)
    - `save_strategy="epoch"` & `evaluation_strategy="epoch"` → checkpoint + eval tiap epoch
-2. Mendefinisikan `collate(batch)` — untuk setiap record memanggil
-   `data.build_training_example(record, processor)`:
-   - `build_training_example()` memanggil `build_prompt()` (prompt `"transcribe the
-     handwritten text\n"`) lalu `processor(text=prompt, images=image, suffix=text)`.
-   - `suffix=text` membuat processor otomatis menyusun **label** (token prompt di-mask dari
+2. Mendefinisikan `collate(batch)` yang memanggil `train.collate_examples(batch, processor)`:
+   - `collate_examples()` menyiapkan **list** untuk seluruh batch: `images` (tiap gambar
+     di-`ensure_rgb`), `prompts` (dari `build_prompt()`), dan `suffixes` (ground-truth `text`).
+   - Lalu memanggil processor **sekali** untuk seluruh batch:
+     `processor(text=prompts, images=images, suffix=suffixes, return_tensors="pt", padding="longest")`.
+   - `suffix=...` membuat processor otomatis menyusun **label** (token prompt di-mask dari
      loss; hanya token jawaban yang dihitung). Inilah inti supervised fine-tuning.
-   - Hasil tiap record di-pad menjadi batch tensor oleh `processor.tokenizer.pad(...)`.
+   - **Kenapa batched, bukan per-record + `tokenizer.pad`?** Jalur per-record menyisakan
+     dimensi `[1, seq_len]` di tiap tensor (→ `[batch, 1, seq_len]` saat ditumpuk) dan tidak
+     menangani `pixel_values` → model menerima hidden-state 4-D dan crash
+     (`too many values to unpack (expected 3)`). `data.build_training_example()` tetap ada
+     sebagai penjelas encode satu-record, tetapi jalur training memakai `collate_examples`.
 3. `find_resume_checkpoint(output_dir)` → mencari folder `checkpoint-<step>` terbaru. Jika
    ada (mis. sesi sebelumnya terputus), training **dilanjutkan**, bukan diulang dari nol.
 4. `Trainer.train(resume_from_checkpoint=...)` → loop pelatihan sebenarnya berjalan.

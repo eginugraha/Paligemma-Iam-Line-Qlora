@@ -20,13 +20,15 @@ class FakeProcessor:
     def __init__(self):
         self.last_call = None  # records the most recent kwargs so tests can assert on them.
 
-    def __call__(self, text=None, images=None, suffix=None, return_tensors=None):
-        # Record what we were asked to encode; return a minimal fake batch.
+    def __call__(self, text=None, images=None, suffix=None, return_tensors=None, padding=None):
+        # Record what we were asked to encode; return a minimal fake batch. `padding` mirrors
+        # the real PaliGemmaProcessor signature so batched-collation tests can assert on it.
         self.last_call = {
             "text": text,
             "images": images,
             "suffix": suffix,
             "return_tensors": return_tensors,
+            "padding": padding,
         }
         return FakeBatch(input_ids=[[1, 2, 3]])
 

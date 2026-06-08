@@ -21,6 +21,31 @@ def test_training_args_fit_t4_and_checkpoint():
     assert args["report_to"] == "none"
 
 
+def test_collate_examples_batches_through_processor_once(fake_processor):
+    # The collator must call the processor ONCE on the whole batch (lists of prompts/images/
+    # suffixes), letting it build padded multimodal inputs + masked labels. Encoding per-record
+    # then tokenizer.pad leaves an extra dim and drops pixel_values -> the model crashes with
+    # "too many values to unpack (expected 3)".
+    import pytest
+
+    from htr_sp1 import train
+
+    Image = pytest.importorskip("PIL.Image")
+    batch = [
+        {"image": Image.new("L", (8, 4)), "text": "ab"},
+        {"image": Image.new("L", (8, 4)), "text": "cd"},
+    ]
+    train.collate_examples(batch, fake_processor)
+    call = fake_processor.last_call
+    # One prompt per record, the ground-truth texts as suffixes, images forced to RGB.
+    assert call["text"] == [config.TRANSCRIPTION_PROMPT, config.TRANSCRIPTION_PROMPT]
+    assert call["suffix"] == ["ab", "cd"]
+    assert all(img.mode == "RGB" for img in call["images"])
+    # Batched padding + torch tensors are required for a real training step.
+    assert call["return_tensors"] == "pt"
+    assert call["padding"] == "longest"
+
+
 def test_training_args_keep_raw_columns_for_collate():
     # Our collate() encodes the raw {image, text} columns itself. HF Trainer otherwise strips
     # any column not in the model's forward signature BEFORE the collator runs, leaving empty
