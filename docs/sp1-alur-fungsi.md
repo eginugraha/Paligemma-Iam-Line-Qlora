@@ -10,9 +10,32 @@ Metodologi & Implementasi).
 - **Metode:** QLoRA — model dasar dibekukan dalam 4-bit (NF4), hanya adapter LoRA kecil yang dilatih
 - **Keluaran akhir:** angka CER/WER (baseline M1) + bobot adapter & model gabungan (merged) di Hugging Face Hub
 
-> **Catatan peran modul:** `notebooks/sp1_train.ipynb` hanya **lem tipis** (orkestrasi).
-> Seluruh logika sebenarnya ada di package teruji `src/htr_sp1/`. Notebook memanggil
-> fungsi-fungsi di bawah ini secara berurutan.
+> **Catatan peran modul:** baik `notebooks/sp1_train.ipynb` maupun skrip CLI hanya **lem
+> tipis** (orkestrasi). Seluruh logika sebenarnya ada di package teruji `src/htr_sp1/`.
+> Keduanya memanggil fungsi-fungsi di bawah ini secara berurutan — nol duplikasi logika.
+
+## 0. Dua Cara Menjalankan (Entry Point)
+
+Pipeline yang **sama persis** bisa dijalankan lewat dua jalur:
+
+| Jalur | File | Untuk |
+|---|---|---|
+| **Notebook** | `notebooks/sp1_train.ipynb` | interaktif (Colab/Jupyter) — lihat tiap cell, cocok untuk eksplorasi |
+| **CLI / skrip** | `scripts/train_sp1.py` → `htr_sp1/cli.py` | server via SSH (mis. RunPod A5000 Pod) — tanpa Jupyter, tanpa Drive |
+
+Jalur CLI memetakan langkah-langkah di bawah ke fungsi `cli.main()`:
+
+```
+build_parser → resolve_config (CLI flag > env var HTR_* > default config.py)
+  → set_seed → load_iam_splits → load_trainable_model(compute_dtype)
+  → [sanity gate]  → run_training(bf16=…)
+  → [evaluate_split + simpan metrics]  → [push_adapter+push_merged + validation gate]
+```
+- **`--precision auto`** memanggil `config.detect_precision()` → `bf16` di GPU Ampere/Ada
+  (A5000/3090/4090), `fp16` di T4 — tanpa edit kode saat pindah mesin.
+- Fungsi murni (`build_parser`, `resolve_precision`, `precision_to_settings`,
+  `resolve_config`) teruji unit; `main()` adalah lem GPU seperti notebook.
+- Contoh: `python scripts/train_sp1.py --skip-sanity --no-push` (lihat `--help` untuk semua flag).
 
 ---
 
