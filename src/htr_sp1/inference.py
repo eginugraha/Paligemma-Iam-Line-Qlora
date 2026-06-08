@@ -7,6 +7,7 @@ in SP-2 is literally this call; M2 (CoT) will reuse the same model with a differ
 from __future__ import annotations
 
 from . import config
+from .data import ensure_rgb
 
 
 def generate_transcription(model, processor, image, prompt: str = config.TRANSCRIPTION_PROMPT, max_new_tokens: int = config.MAX_TARGET_TOKENS) -> str:
@@ -26,7 +27,7 @@ def generate_transcription(model, processor, image, prompt: str = config.TRANSCR
     # Encode WITHOUT a suffix — at inference we have no ground truth; the model generates it.
     inputs = processor(
         text=prompt,
-        images=image,
+        images=ensure_rgb(image),  # IAM lines are grayscale; PaliGemma needs 3-channel RGB
         suffix=None,
         return_tensors="pt",
     )

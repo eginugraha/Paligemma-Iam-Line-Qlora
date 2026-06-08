@@ -24,6 +24,16 @@ def test_generate_transcription_feeds_prompt_and_image(fake_model, fake_processo
     assert fake_processor.last_call["suffix"] is None
 
 
+def test_generate_transcription_converts_grayscale_to_rgb(fake_model, fake_processor):
+    # Same grayscale->RGB requirement applies at inference, or PaliGemma's processor errors.
+    import pytest
+
+    Image = pytest.importorskip("PIL.Image")
+    gray = Image.new("L", (8, 4))
+    inference.generate_transcription(fake_model, fake_processor, image=gray)
+    assert fake_processor.last_call["images"].mode == "RGB"
+
+
 def test_generate_transcription_accepts_custom_prompt(fake_model, fake_processor):
     # SP-2 M2 (CoT) drives a different prompt through the same function.
     custom = "describe the strokes then give Final:\n"

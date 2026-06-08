@@ -36,6 +36,25 @@ def build_prompt() -> str:
     return config.TRANSCRIPTION_PROMPT
 
 
+def ensure_rgb(image):
+    """Return the image as 3-channel RGB.
+
+    IAM-line images are grayscale (PIL mode "L" -> a 2D height×width array). PaliGemma's image
+    processor requires 3-channel RGB and raises "Unsupported number of image dimensions: 2" on
+    a 2D array. PIL images expose `.convert`; anything without it (e.g. a test stub) is passed
+    through unchanged so unit tests stay simple.
+
+    Args:
+        image: A PIL.Image (any mode) or a non-PIL stub.
+
+    Returns:
+        An RGB PIL.Image, or the original object if it has no `.convert`.
+    """
+    if hasattr(image, "convert"):
+        return image.convert("RGB")
+    return image
+
+
 def build_training_example(record: Dict[str, Any], processor) -> Dict[str, Any]:
     """Encode one IAM record into model inputs WITH labels, for supervised fine-tuning.
 
@@ -51,7 +70,7 @@ def build_training_example(record: Dict[str, Any], processor) -> Dict[str, Any]:
     """
     return processor(
         text=build_prompt(),               # the conditioning prompt prefix (single source)
-        images=record["image"],            # the handwriting line image
+        images=ensure_rgb(record["image"]),  # handwriting line, forced to 3-channel RGB
         suffix=record["text"],             # the ground truth -> becomes the labels
         return_tensors="pt",
     )
