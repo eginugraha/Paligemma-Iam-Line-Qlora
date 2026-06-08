@@ -9,13 +9,15 @@ from __future__ import annotations
 from . import config
 
 
-def generate_transcription(model, processor, image, max_new_tokens: int = config.MAX_TARGET_TOKENS) -> str:
+def generate_transcription(model, processor, image, prompt: str = config.TRANSCRIPTION_PROMPT, max_new_tokens: int = config.MAX_TARGET_TOKENS) -> str:
     """Transcribe a single handwriting-line image.
 
     Args:
         model: A loaded PaliGemma model (fine-tuned, or base+adapter, or a test fake).
         processor: The matching PaliGemmaProcessor (or a test fake).
         image: A PIL.Image of one handwriting line.
+        prompt: The instruction text. Defaults to the M1 transcription prompt; SP-2 passes
+            the CoT prompt for M2. Kept as a parameter so one function serves both modes.
         max_new_tokens: Generation cap; IAM lines are short so the default is small.
 
     Returns:
@@ -23,7 +25,7 @@ def generate_transcription(model, processor, image, max_new_tokens: int = config
     """
     # Encode WITHOUT a suffix — at inference we have no ground truth; the model generates it.
     inputs = processor(
-        text=config.TRANSCRIPTION_PROMPT,
+        text=prompt,
         images=image,
         suffix=None,
         return_tensors="pt",

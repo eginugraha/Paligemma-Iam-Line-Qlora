@@ -22,3 +22,10 @@ def test_generate_transcription_feeds_prompt_and_image(fake_model, fake_processo
     assert fake_processor.last_call["text"] == config.TRANSCRIPTION_PROMPT
     # At inference there is NO suffix (we have no label; the model must produce the text).
     assert fake_processor.last_call["suffix"] is None
+
+
+def test_generate_transcription_accepts_custom_prompt(fake_model, fake_processor):
+    # SP-2 M2 (CoT) drives a different prompt through the same function.
+    custom = "describe the strokes then give Final:\n"
+    inference.generate_transcription(fake_model, fake_processor, image=object(), prompt=custom)
+    assert fake_processor.last_call["text"] == custom
