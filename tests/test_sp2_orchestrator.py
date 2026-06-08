@@ -74,3 +74,29 @@ def test_engine_called_with_correct_prompts_and_caps():
     assert eng.calls[0]["max_new_tokens"] == config.M1_MAX_NEW_TOKENS
     assert eng.calls[1]["prompt"] == config.M2_PROMPT
     assert eng.calls[1]["max_new_tokens"] == config.M2_MAX_NEW_TOKENS
+
+
+def test_non_engine_error_propagates(monkeypatch):
+    # Only EngineError is caught per-scenario. Any other exception must NOT be swallowed.
+    import pytest
+
+    class BoomEngine(FakeEngine):
+        def run(self, image, prompt, max_new_tokens):
+            raise RuntimeError("unexpected")
+
+    with pytest.raises(RuntimeError):
+        # Must consume the generator to trigger the engine call.
+        list(detect_stream(BoomEngine(), image=object(), filename="x.png", ground_truth=None))
+
+
+def test_both_models_fail_still_emits_done():
+    eng = FakeEngine(responses=["a", "b"], fail_on={0, 1})
+    events = _events(detect_stream(eng, image=object(), filename="x.png", ground_truth=None))
+    assert [e["event"] for e in events] == ["meta", "error", "error", "done"]
+    assert events[1]["model"] == "m1" and events[2]["model"] == "m2"
+
+
+def test_meta_has_ground_truth_true_when_provided():
+    eng = FakeEngine(responses=["a", "Final: a"])
+    events = _events(detect_stream(eng, image=object(), filename="x.png", ground_truth="a"))
+    assert events[0] == {"event": "meta", "filename": "x.png", "has_ground_truth": True}
