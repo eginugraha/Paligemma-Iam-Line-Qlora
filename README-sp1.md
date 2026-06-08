@@ -20,6 +20,26 @@ python -m pytest
 3. Run top to bottom. The **sanity gate** (overfit 2 samples) must show loss→~0 before the full run.
 4. Outputs: test CER/WER (`test_metrics.json` on Drive) + adapter & merged repos on the Hub.
 
+## Train on a server / CLI (e.g. RunPod A5000 Pod) — no notebook, no Drive
+Same pipeline as the notebook, runnable over SSH. Persistence comes from the machine's own
+disk (e.g. a RunPod Network Volume at `/workspace`), so there is **no Colab/Drive mounting**.
+
+```bash
+git clone <repo> /workspace/htr && cd /workspace/htr
+pip install -r requirements.txt
+export HTR_OUTPUT_DIR="/workspace/outputs"          # persistent dir for checkpoints
+export HTR_HUB_REPO_ID="your-hf-username/paligemma-iam-line-qlora"
+huggingface-cli login                               # token with write access
+
+python scripts/train_sp1.py                         # full pipeline; precision auto-detected
+python scripts/train_sp1.py --help                  # all flags
+nohup python scripts/train_sp1.py > train.log 2>&1 &   # headless; tail -f train.log
+```
+- **Precision:** `--precision auto` (default) picks **bf16** on Ampere/Ada GPUs (A5000/3090/4090), **fp16** on a T4 — no code edit needed when moving machines.
+- **Config precedence:** CLI flag > env var (`HTR_*`) > `config.py` default. Override per run with `--epochs`, `--batch-size`, `--output-dir`, `--hub-repo`.
+- **Skip flags:** `--skip-sanity`, `--no-eval`, `--no-push` (the last also skips reload-validation).
+- Resumes automatically from the latest checkpoint in `--output-dir` if interrupted.
+
 ## Inference interface (the contract SP-2 imports)
 ```python
 from htr_sp1.inference import generate_transcription

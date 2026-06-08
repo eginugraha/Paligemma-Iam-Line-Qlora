@@ -15,11 +15,16 @@ from typing import Any, Dict, Optional
 from . import config
 
 
-def build_training_args(output_dir: str) -> Dict[str, Any]:
-    """Return TrainingArguments fields tuned for a Colab T4 with frequent checkpoints.
+def build_training_args(output_dir: str, *, bf16: bool = False) -> Dict[str, Any]:
+    """Return TrainingArguments fields tuned for a T4-class run with frequent checkpoints.
+
+    Mixed precision: HF errors if both fp16 and bf16 are enabled, so we set exactly one. The
+    default is fp16 (the T4-safe baseline); pass bf16=True on an Ampere/Ada GPU for faster,
+    more stable training.
 
     Args:
-        output_dir: Where checkpoints/logs are written (point at Drive in Colab).
+        output_dir: Where checkpoints/logs are written (a persistent volume on a server).
+        bf16: Use bfloat16 mixed precision instead of float16.
     """
     return {
         "output_dir": output_dir,
@@ -28,7 +33,9 @@ def build_training_args(output_dir: str) -> Dict[str, Any]:
         "learning_rate": config.LEARNING_RATE,
         "num_train_epochs": config.NUM_TRAIN_EPOCHS,
         "gradient_checkpointing": True,   # memory-for-compute trade; needed on 16GB
-        "fp16": True,                     # T4 (Turing) supports fp16, not bf16
+        # Exactly one mixed-precision mode on — never both (HF raises if both are True).
+        "fp16": not bf16,                 # T4 (Turing) supports fp16, not bf16
+        "bf16": bf16,                     # Ampere/Ada (e.g. A5000) supports bf16
         "save_strategy": "epoch",         # checkpoint every epoch -> resumable
         "evaluation_strategy": "epoch",   # eval each epoch; live signal is eval LOSS (Trainer
         # does not generate during eval), while true val/test CER is computed via evaluate_split.
@@ -60,8 +67,8 @@ def find_resume_checkpoint(output_dir: str) -> Optional[str]:
     return max(checkpoints, key=lambda p: int(p.rsplit("-", 1)[-1]))
 
 
-def run_training(model, processor, train_ds, eval_ds, output_dir: str):
-    """Run the real fine-tuning loop on Colab/GPU, resuming if a checkpoint exists.
+def run_training(model, processor, train_ds, eval_ds, output_dir: str, *, bf16: bool = False):
+    """Run the real fine-tuning loop on GPU, resuming if a checkpoint exists.
 
     Heavy imports are local so the module stays laptop-importable for unit tests.
 
@@ -69,7 +76,8 @@ def run_training(model, processor, train_ds, eval_ds, output_dir: str):
         model: PEFT-wrapped PaliGemma from `model.load_trainable_model`.
         processor: The matching processor.
         train_ds / eval_ds: HF datasets yielding {"image", "text"} records.
-        output_dir: Checkpoint/log directory (Drive path in Colab).
+        output_dir: Checkpoint/log directory (a persistent volume path on a server).
+        bf16: Use bfloat16 mixed precision (Ampere/Ada); defaults to fp16.
 
     Returns:
         The trained model (LoRA weights updated in place).
@@ -92,7 +100,7 @@ def run_training(model, processor, train_ds, eval_ds, output_dir: str):
             )
         return processor.tokenizer.pad(examples, return_tensors="pt")
 
-    args = TrainingArguments(**build_training_args(output_dir))
+    args = TrainingArguments(**build_training_args(output_dir, bf16=bf16))
     trainer = Trainer(
         model=model,
         args=args,

@@ -11,17 +11,21 @@ from typing import Any, Dict
 from . import config
 
 
-def build_quant_config() -> Dict[str, Any]:
+def build_quant_config(compute_dtype: str = "float16") -> Dict[str, Any]:
     """Describe the 4-bit (QLoRA) quantization of the frozen base model.
 
-    NF4 is the 4-bit format from the QLoRA paper. Compute dtype is float16 because the Colab
-    T4 (Turing) supports fp16 but NOT bf16 — using bf16 here would error on a T4. Returned as
-    a dict so tests can assert on it without importing bitsandbytes.
+    NF4 is the 4-bit format from the QLoRA paper. The default compute dtype is float16 because
+    the Colab T4 (Turing) supports fp16 but NOT bf16 — using bf16 there would error. On an
+    Ampere/Ada GPU (e.g. RunPod A5000) the caller passes "bfloat16" for faster, more stable
+    compute. Returned as a dict so tests can assert on it without importing bitsandbytes.
+
+    Args:
+        compute_dtype: torch dtype name for 4-bit compute ("float16" or "bfloat16").
     """
     return {
         "load_in_4bit": True,
         "bnb_4bit_quant_type": "nf4",
-        "bnb_4bit_compute_dtype": "float16",  # T4 supports fp16, not bf16
+        "bnb_4bit_compute_dtype": compute_dtype,
         "bnb_4bit_use_double_quant": True,  # extra memory saving, important on 16GB
     }
 
@@ -37,13 +41,16 @@ def build_lora_config() -> Dict[str, Any]:
     }
 
 
-def load_trainable_model():
+def load_trainable_model(compute_dtype: str = "float16"):
     """Load PaliGemma in 4-bit and attach a fresh LoRA adapter (Colab/GPU only).
 
     Heavy imports are local so this module imports instantly in unit tests. Steps:
       1. Quantize the base model to 4-bit NF4 (frozen).
       2. Prepare it for k-bit training (enables gradient checkpointing, casts norms).
       3. Wrap it with a LoRA adapter — only the small adapter weights will train.
+
+    Args:
+        compute_dtype: 4-bit compute dtype ("float16" for T4, "bfloat16" for Ampere/Ada).
 
     Returns:
         (model, processor): the PEFT-wrapped model and its PaliGemmaProcessor.
@@ -57,7 +64,7 @@ def load_trainable_model():
     from peft import LoraConfig, get_peft_model, prepare_model_for_kbit_training
 
     # Translate our plain-dict config into the real bitsandbytes config object.
-    qc = build_quant_config()
+    qc = build_quant_config(compute_dtype)
     bnb = BitsAndBytesConfig(
         load_in_4bit=qc["load_in_4bit"],
         bnb_4bit_quant_type=qc["bnb_4bit_quant_type"],

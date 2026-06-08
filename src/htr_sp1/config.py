@@ -60,6 +60,27 @@ HF_HUB_REPO_ID = os.environ.get("HTR_HUB_REPO_ID", "your-username/paligemma-iam-
 SEED = 42
 
 
+def detect_precision() -> str:
+    """Pick the best training precision for the current GPU: "bf16" or "fp16".
+
+    bfloat16 is faster and numerically more stable than float16, but only Ampere/Ada-class
+    GPUs (and newer) support it — a Turing T4 does NOT. We probe torch at runtime so the same
+    code auto-adapts when moved between machines (e.g. Colab T4 -> a RunPod A5000) without a
+    code edit. torch is imported lazily so this module stays importable on a CPU-only laptop.
+
+    Returns:
+        "bf16" if a bfloat16-capable CUDA GPU is present, otherwise the safe default "fp16".
+    """
+    try:
+        import torch
+
+        if torch.cuda.is_available() and torch.cuda.is_bf16_supported():
+            return "bf16"
+    except ImportError:
+        pass
+    return "fp16"
+
+
 def set_seed(seed: int = SEED) -> None:
     """Seed every RNG we rely on so a run is reproducible.
 

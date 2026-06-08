@@ -21,6 +21,21 @@ def test_training_args_fit_t4_and_checkpoint():
     assert args["report_to"] == "none"
 
 
+def test_training_args_default_is_fp16_not_bf16():
+    # Default (no bf16 request) keeps the T4-safe baseline: fp16 on, bf16 off. HF errors if
+    # both are True, so exactly one must be enabled.
+    args = train.build_training_args(output_dir="/tmp/run")
+    assert args["fp16"] is True
+    assert args["bf16"] is False
+
+
+def test_training_args_bf16_disables_fp16():
+    # Requesting bf16 (Ampere/Ada) must enable bf16 AND disable fp16 — never both on.
+    args = train.build_training_args(output_dir="/tmp/run", bf16=True)
+    assert args["bf16"] is True
+    assert args["fp16"] is False
+
+
 def test_find_resume_checkpoint_prefers_existing(tmp_path):
     # No checkpoints yet -> None (start fresh).
     assert train.find_resume_checkpoint(str(tmp_path)) is None
