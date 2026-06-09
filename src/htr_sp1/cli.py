@@ -193,7 +193,10 @@ def main(argv: Optional[Sequence[str]] = None) -> RunConfig:
     # 6. Export adapter + merged to the Hub, then reload-validate (definition of done).
     if not rc.no_push:
         export.push_adapter(model, processor, export.adapter_repo_id(rc.hub_repo))
-        export.push_merged(model, processor, export.merged_repo_id(rc.hub_repo))
+        # Merge happens on a full-precision base (not the 4-bit one). Match the run's precision:
+        # bf16 on Ampere/Ada, fp16 on a T4.
+        export.push_merged(model, processor, export.merged_repo_id(rc.hub_repo),
+                           compute_dtype="bfloat16" if rc.bf16 else "float16")
         print("[SP-1] pushed:", export.adapter_repo_id(rc.hub_repo),
               "and", export.merged_repo_id(rc.hub_repo))
 
