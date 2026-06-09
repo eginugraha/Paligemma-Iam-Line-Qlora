@@ -29,6 +29,10 @@ def build_training_args(output_dir: str, *, bf16: bool = False) -> Dict[str, Any
     return {
         "output_dir": output_dir,
         "per_device_train_batch_size": config.PER_DEVICE_TRAIN_BATCH_SIZE,
+        # MUST set this explicitly. HF defaults per_device_eval_batch_size to 8 when omitted, and
+        # an eval batch of 8 over PaliGemma's ~257k vocab allocates ~8 GiB for the cross-entropy
+        # logits in one shot -> CUDA OOM at the first end-of-epoch eval (24GB A5000). Keep it at 1.
+        "per_device_eval_batch_size": config.PER_DEVICE_EVAL_BATCH_SIZE,
         "gradient_accumulation_steps": config.GRAD_ACCUMULATION_STEPS,
         "learning_rate": config.LEARNING_RATE,
         "num_train_epochs": config.NUM_TRAIN_EPOCHS,

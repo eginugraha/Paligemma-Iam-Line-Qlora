@@ -32,6 +32,12 @@ TRANSCRIPTION_PROMPT = "transcribe the handwritten text\n"
 # Per-device batch of 1 keeps memory low; we recover effective batch size via accumulation.
 PER_DEVICE_TRAIN_BATCH_SIZE = 1
 GRAD_ACCUMULATION_STEPS = 8           # effective batch = PER_DEVICE_TRAIN_BATCH_SIZE * 8
+# Evaluation batch size. CRITICAL: if left unset, HF TrainingArguments defaults this to 8.
+# During eval the model emits logits of shape [batch, seq_len, vocab], and PaliGemma's vocab is
+# ~257k, so cross_entropy upcasts to fp32 and a batch of 8 allocates ~8 GiB in ONE go -> OOM on
+# a 24GB GPU (this is what blew up at the first end-of-epoch eval). We keep eval at 1, matching
+# training; eval has no .backward() so a single sample fits comfortably.
+PER_DEVICE_EVAL_BATCH_SIZE = 1
 LEARNING_RATE = 2e-4                  # typical for LoRA adapters
 NUM_TRAIN_EPOCHS = 3
 MAX_TARGET_TOKENS = 64               # IAM lines are short; caps memory + generation length

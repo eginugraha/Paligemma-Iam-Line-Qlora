@@ -46,6 +46,16 @@ def test_collate_examples_batches_through_processor_once(fake_processor):
     assert call["padding"] == "longest"
 
 
+def test_training_args_set_eval_batch_size_to_avoid_oom():
+    # Regression guard for a CUDA OOM at the first end-of-epoch eval: HF defaults
+    # per_device_eval_batch_size to 8, and a batch of 8 over PaliGemma's ~257k vocab allocates
+    # ~8 GiB for the cross-entropy logits in one shot. We must pin eval batch size to the small
+    # config value (1) so eval fits the same 24GB GPU that training does.
+    args = train.build_training_args(output_dir="/tmp/run")
+    assert args["per_device_eval_batch_size"] == config.PER_DEVICE_EVAL_BATCH_SIZE
+    assert config.PER_DEVICE_EVAL_BATCH_SIZE == 1
+
+
 def test_training_args_keep_raw_columns_for_collate():
     # Our collate() encodes the raw {image, text} columns itself. HF Trainer otherwise strips
     # any column not in the model's forward signature BEFORE the collator runs, leaving empty
