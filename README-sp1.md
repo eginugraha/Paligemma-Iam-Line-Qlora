@@ -34,7 +34,18 @@ huggingface-cli login                               # token with write access
 python scripts/train_sp1.py                         # full pipeline; precision auto-detected
 python scripts/train_sp1.py --help                  # all flags
 nohup python scripts/train_sp1.py > train.log 2>&1 &   # headless; tail -f train.log
+
+# 1) SMOKE TEST dulu — 50 sampel, cepat, pastikan pipeline jalan:
+python scripts/eval_sp1.py --base-precision bf16 --limit 50
+
+# 2) Kalau lancar, full apple-to-apple (masing-masing ~8 menit, seperti eval kemarin):
+python scripts/eval_sp1.py --base-precision 4bit --out test_metrics_4bit.json
+python scripts/eval_sp1.py --base-precision bf16 --out test_metrics_bf16.json
+
+huggingface-cli upload eginugraha/htr-sp1-run-artifacts /workspace/outputs/test_metrics.json test_metrics.json --repo-type dataset
+huggingface-cli upload eginugraha/htr-sp1-run-artifacts /workspace/htr/train.log train.log --repo-type dataset
 ```
+ps aux | grep python scripts/train_sp1.py
 - **Precision:** `--precision auto` (default) picks **bf16** on Ampere/Ada GPUs (A5000/3090/4090), **fp16** on a T4 — no code edit needed when moving machines.
 - **Config precedence:** CLI flag > env var (`HTR_*`) > `config.py` default. Override per run with `--epochs`, `--batch-size`, `--output-dir`, `--hub-repo`.
 - **Skip flags:** `--skip-sanity`, `--no-eval`, `--no-push` (the last also skips reload-validation).

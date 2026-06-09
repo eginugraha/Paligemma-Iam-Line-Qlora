@@ -95,3 +95,67 @@ def load_trainable_model(compute_dtype: str = "float16"):
     )
     model = get_peft_model(base, lora)  # only LoRA params are now trainable
     return model, processor
+
+
+def load_eval_model(adapter_source: str, *, base_precision: str = "bf16",
+                    compute_dtype: str = "bfloat16"):
+    """Load the base + a TRAINED LoRA adapter for inference/evaluation (no training).
+
+    This is the honest way to re-measure CER/WER: we attach the already-trained adapter to a
+    freshly loaded base and run generation. Nothing is trained or merged here, so the adapter
+    (the training result) is untouched — we only vary HOW the base is loaded.
+
+    The `base_precision` knob is the whole point of this function. The adapter was trained
+    against a 4-bit base, so the precisions are NOT interchangeable and may shift the score:
+      - "4bit": reload the base in 4-bit NF4, exactly like training time. This reproduces the
+                original baseline numbers. Requires a CUDA GPU + bitsandbytes (won't run on Mac).
+      - "bf16": load the base in bfloat16 (~5.8 GB). Full precision vs the coarse 4-bit; this
+                is the config a merged-bf16 deployment effectively uses. Recommended default.
+      - "fp32": load the base in float32 (~11.7 GB, the on-disk dtype). Most faithful, most
+                memory; use only if you want zero precision compromise.
+
+    Args:
+        adapter_source: Hub repo id (e.g. "user/...-adapter") OR a local adapter directory.
+        base_precision: One of "4bit" | "bf16" | "fp32" (see above).
+        compute_dtype: 4-bit compute dtype, only used when base_precision == "4bit".
+
+    Returns:
+        (model, processor): the base+adapter model in eval mode and its PaliGemmaProcessor.
+    """
+    import torch
+    from transformers import (
+        BitsAndBytesConfig,
+        PaliGemmaForConditionalGeneration,
+        PaliGemmaProcessor,
+    )
+    from peft import PeftModel
+
+    processor = PaliGemmaProcessor.from_pretrained(config.BASE_MODEL_ID)
+
+    if base_precision == "4bit":
+        # Same NF4 config as training so the base the adapter "sees" matches what it learned on.
+        qc = build_quant_config(compute_dtype)
+        bnb = BitsAndBytesConfig(
+            load_in_4bit=qc["load_in_4bit"],
+            bnb_4bit_quant_type=qc["bnb_4bit_quant_type"],
+            bnb_4bit_compute_dtype=getattr(torch, qc["bnb_4bit_compute_dtype"]),
+            bnb_4bit_use_double_quant=qc["bnb_4bit_use_double_quant"],
+        )
+        base = PaliGemmaForConditionalGeneration.from_pretrained(
+            config.BASE_MODEL_ID, quantization_config=bnb, device_map="auto",
+        )
+    elif base_precision in ("bf16", "fp32"):
+        # No quantization: load the full-precision base, downcasting the on-disk float32 to the
+        # requested dtype. bf16 is plenty precise next to 4-bit and halves memory vs fp32.
+        dtype = torch.bfloat16 if base_precision == "bf16" else torch.float32
+        base = PaliGemmaForConditionalGeneration.from_pretrained(
+            config.BASE_MODEL_ID, torch_dtype=dtype, device_map="auto",
+        )
+    else:
+        raise ValueError(f"base_precision must be '4bit', 'bf16' or 'fp32', got {base_precision!r}")
+
+    # Attach the trained adapter on top of the chosen base. No merge — adapter stays separate,
+    # exactly the configuration used to produce the original evaluation numbers.
+    model = PeftModel.from_pretrained(base, adapter_source)
+    model.eval()  # disable dropout etc.; we are only generating, never training
+    return model, processor
