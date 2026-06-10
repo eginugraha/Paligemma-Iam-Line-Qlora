@@ -6,6 +6,7 @@ the IAM validation split as a JSON list of {"prediction": ..., "ground_truth": .
 file from the SP-1 eval (scripts/eval_sp1.py writes per_sample rows you can adapt) or any M1 run.
 
 Usage:
+    # HTR_PG_DSN can come from the shell or a local .env file (see .env.example).
     export HTR_PG_DSN="postgresql://localhost:5432/htr"
     python scripts/tune_sp3.py --pairs val_m1_predictions.json --out tune_sp3.json
 """
@@ -17,6 +18,17 @@ from pathlib import Path
 SRC = Path(__file__).resolve().parent.parent / "src"
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
+
+# Load credentials (e.g. HTR_PG_DSN) from a local .env file BEFORE importing any htr_sp3
+# module — config.py reads os.environ at import time, so the .env must populate the
+# environment first. python-dotenv is optional: if it is not installed we silently fall back
+# to whatever is already exported in the shell (the original behaviour, no .env required).
+try:
+    from dotenv import load_dotenv  # type: ignore
+
+    load_dotenv(SRC.parent / ".env")  # SRC.parent == repo root, where .env lives
+except ImportError:
+    pass
 
 from htr_sp1 import data  # noqa: E402
 from htr_sp3 import tune, vocab  # noqa: E402

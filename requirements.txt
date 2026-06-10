@@ -13,3 +13,4 @@ pillow==10.4.0
 pytest==8.2.2
 psycopg[binary]>=3.1   # PostgreSQL driver for the pgvector store (SP-3)
 # Requires a PostgreSQL server with the `pgvector` extension available (CREATE EXTENSION vector).
+python-dotenv>=1.0     # optional: lets the SP-3 CLIs read HTR_PG_DSN from a local .env file
