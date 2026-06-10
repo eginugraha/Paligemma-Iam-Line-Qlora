@@ -111,6 +111,43 @@ def save_adapter(model, processor, adapter_dir):
     return adapter_dir
 
 
+def merge_to_dir(adapter_source, merged_dir, *, compute_dtype="bfloat16"):
+    """Merge a trained adapter into a full-precision base and write the self-contained model.
+
+    CRITICAL (unchanged from the original push_merged rationale): we do NOT merge the in-memory
+    4-bit model — folding the adapter into 4-bit weights rounds and visibly corrupts generations.
+    Instead we load the base at full precision on CPU (no quantization, no device_map, so we do
+    not fight any resident training model for GPU memory), attach the adapter from *adapter_source*,
+    merge there, and save to disk. The processor is loaded from the base id (it is never
+    fine-tuned) so this works whether *adapter_source* is a final_adapter dir or a raw checkpoint.
+
+    Args:
+        adapter_source: Path (or Hub id) of the trained LoRA adapter.
+        merged_dir: Destination directory for the merged fp16 model + processor.
+        compute_dtype: Full-precision dtype to load the base in ("bfloat16" on Ampere/Ada).
+
+    Returns:
+        merged_dir.
+    """
+    import torch
+    from transformers import PaliGemmaForConditionalGeneration, PaliGemmaProcessor
+    from peft import PeftModel
+
+    from . import config
+
+    base = PaliGemmaForConditionalGeneration.from_pretrained(
+        config.BASE_MODEL_ID, torch_dtype=getattr(torch, compute_dtype),
+    )
+    merged = PeftModel.from_pretrained(base, adapter_source).merge_and_unload()
+    merged.save_pretrained(merged_dir)
+
+    # Processor comes from the base model id (identical, never trained) so a checkpoint source
+    # without a saved processor still produces a self-contained merged dir.
+    processor = PaliGemmaProcessor.from_pretrained(config.BASE_MODEL_ID)
+    processor.save_pretrained(merged_dir)
+    return merged_dir
+
+
 def push_folder(local_dir, repo_id, *, commit_message=None, private=True, allow_patterns=None):
     """Upload a local directory to a Hub repo (the ONE place a push happens).
 
