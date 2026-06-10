@@ -138,6 +138,7 @@ def detect_stream(
     image: Image.Image,
     filename: str,
     ground_truth: str | None,
+    corrector=None,  # optional htr_sp3.corrector.RagCorrector; when set, emit m3 & m4
 ) -> Iterator[str]:
     """Run M1 then M2 against *engine* and yield NDJSON lines.
 
@@ -155,6 +156,11 @@ def detect_stream(
       - A dead M1 (e.g. bad prompt format) does not block M2.
       - The ``done`` event is always emitted, so the client is never left
         waiting for a stream that silently stalled.
+
+    When a corrector is present (M3/M4), failures in ``corrector.correct`` are
+    also isolated: they emit an error event for that RAG scenario and the stream
+    continues. M4 is additionally skipped (with its own error event) if M2
+    produced no text (i.e. M2 itself failed).
 
     Metrics
     -------
@@ -175,6 +181,11 @@ def detect_stream(
                       ``None`` when the caller did not provide one. When
                       ``None``, ``cer`` and ``wer`` fields in result events
                       are ``null`` (JSON) / ``None`` (Python).
+        corrector:    Optional duck-typed corrector (e.g. ``RagCorrector`` from
+                      htr_sp3). When supplied, two additional scenarios are emitted
+                      after M1/M2: M3 corrects M1's text, M4 corrects M2's text.
+                      When ``None``, behaviour is identical to the original two-
+                      scenario stream (backward-compatible).
 
     Yields:
         NDJSON lines — each a ``json.dumps(event) + "\n"`` string. The
@@ -186,6 +197,12 @@ def detect_stream(
     yield _line(schemas.meta_event(filename, ground_truth is not None))
 
     # --- 2. Run each scenario in order ----------------------------------------
+    # m1_text / m2_text are populated inside the loop and read by the RAG block
+    # (section 2.5) that follows. Initialised to None so the RAG block can detect
+    # a scenario that failed (EngineError) without needing a separate flag.
+    m1_text = None
+    m2_text = None
+
     for spec in _SPECS:
         try:
             # Time the full round-trip to the engine (including any network
@@ -207,11 +224,13 @@ def detect_stream(
             # leading/trailing whitespace that the model may include.
             text = raw.strip()
             log = M1_LOG
+            m1_text = text          # remember for M3 (RAG correction of the baseline)
         else:
             # M2 (CoT): the raw output contains reasoning + 'Final:' answer.
             # parse_cot returns (final_answer, reasoning_log); the log goes into
             # the result event so the frontend can surface it in a tooltip.
             text, log = parse_cot(raw)
+            m2_text = text          # remember for M4 (RAG correction of the CoT answer)
 
         # --- 2b. Compute quality metrics (only when ground truth is available) -
         if ground_truth is not None:
@@ -234,6 +253,43 @@ def detect_stream(
             log=log,
             status_tag=spec.status_tag,
         ))
+
+    # --- 2.5 RAG correction scenarios (only when a corrector is supplied) ------
+    # M3 corrects M1's text; M4 corrects M2's text. Each is isolated: a failure emits an error
+    # event for that scenario and the stream continues. M4 is skipped if M2 produced no text.
+    if corrector is not None:
+        _rag_sources = [
+            ("m3", m1_text, config.M3_STATUS_TAG, "m1"),
+            ("m4", m2_text, config.M4_STATUS_TAG, "m2"),
+        ]
+        for model, source_text, status_tag, depends_on in _rag_sources:
+            if source_text is None:
+                # The upstream scenario (m1 or m2) failed; we have nothing to correct.
+                yield _line(schemas.error_event(model, f"depends on {depends_on} which failed"))
+                continue
+            try:
+                start = time.perf_counter()
+                corrected, corrections = corrector.correct(source_text)
+                latency = round(time.perf_counter() - start, 3)
+            except Exception as exc:  # corrector/store failure isolates to this scenario
+                yield _line(schemas.error_event(model, str(exc)))
+                continue
+
+            if ground_truth is not None:
+                cer_value = round(cer_metric(ground_truth, corrected), 2)
+                wer_value = round(wer_metric(ground_truth, corrected), 2)
+            else:
+                cer_value = wer_value = None
+
+            # Human-readable correction log for the frontend tooltip / thesis appendix.
+            log = "RAG: " + (
+                ", ".join(f"{c['from']}→{c['to']} ({c['distance']})" for c in corrections)
+                if corrections else "no corrections"
+            )
+            yield _line(schemas.result_event(
+                model=model, text=corrected, cer=cer_value, wer=wer_value,
+                latency_seconds=latency, log=log, status_tag=status_tag,
+            ))
 
     # --- 3. Close the stream with a done event --------------------------------
     # Always emitted, even if all scenarios failed — the client must be able to
