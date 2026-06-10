@@ -207,7 +207,11 @@ def main(argv: Optional[Sequence[str]] = None) -> RunConfig:
         # Push failed but the run is safe on disk. Print the exact recovery command.
         print(f"[SP-1] PUSH FAILED: {status['error']}")
         print("[SP-1] artifacts are safe on disk. Re-push later with:")
-        print(f"    python scripts/repush_sp1.py --output-dir {rc.output_dir} --hub-repo {rc.hub_repo}")
+        # Include --compute-dtype so a later rebuild (if merged/ were removed) matches this run's
+        # precision exactly (bf16 on Ampere/Ada, fp16 on a T4).
+        dtype_flag = "bfloat16" if rc.bf16 else "float16"
+        print(f"    python scripts/repush_sp1.py --output-dir {rc.output_dir} "
+              f"--hub-repo {rc.hub_repo} --compute-dtype {dtype_flag}")
     else:
         print("[SP-1] pushed:", export.adapter_repo_id(rc.hub_repo),
               "and", export.merged_repo_id(rc.hub_repo))

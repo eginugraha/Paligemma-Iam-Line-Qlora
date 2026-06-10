@@ -45,6 +45,13 @@ def resolve_repush_plan(
         compute_dtype: Full-precision dtype for the merge step.
         exists: Predicate for path existence (injected for tests).
         find_checkpoint: Returns the latest Trainer checkpoint dir or None (injected for tests).
+
+    Note:
+        When the source falls back to a raw Trainer checkpoint (no final_adapter), that dir has the
+        adapter weights but not the processor (Trainer was not given one), so the pushed adapter
+        repo will lack processor files — load it against the base processor. The merged repo is
+        unaffected (its processor comes from BASE_MODEL_ID). The normal source,
+        <output_dir>/final_adapter, is self-contained (save_adapter writes the processor too).
     """
     from .export import adapter_repo_id, merged_repo_id
 
