@@ -17,3 +17,14 @@ def test_model_prompts_and_tags():
     assert config.M1_STATUS_TAG == "Raw Output"
     assert config.M2_STATUS_TAG == "Reasoned"
     assert config.M2_MAX_NEW_TOKENS > config.M1_MAX_NEW_TOKENS
+
+
+def test_rag_is_disabled_by_default():
+    # M3/M4 must be OFF unless explicitly enabled, so M1/M2 behaviour is unchanged.
+    from htr_sp2 import config
+    assert config.ENABLE_RAG is False
+
+
+def test_cors_origins_default_is_wildcard():
+    from htr_sp2 import config
+    assert config.CORS_ORIGINS == ["*"]
