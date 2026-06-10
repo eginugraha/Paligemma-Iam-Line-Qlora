@@ -61,3 +61,8 @@ M2_MAX_NEW_TOKENS = int(os.environ.get("HTR_M2_MAX_NEW_TOKENS", "256"))
 
 # Human-readable label for M2 results in the frontend and NDJSON logs.
 M2_STATUS_TAG = "Reasoned"
+
+# M3 (RAG correction of M1) and M4 (RAG correction of M2/CoT) status badges shown by the
+# frontend table. Kept here with the M1/M2 tags so all scenario labels live in one file.
+M3_STATUS_TAG = "Corrected"
+M4_STATUS_TAG = "Optimal"
