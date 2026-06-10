@@ -34,3 +34,22 @@ def test_nearest_results_sorted_by_ascending_distance():
 
 def test_empty_store_returns_empty():
     assert InMemoryVectorStore().nearest(vectorize.word_to_vector("x"), k=5) == []
+
+
+import os  # noqa: E402
+
+import pytest  # noqa: E402
+
+from htr_sp3.config import VOCAB_TABLE  # noqa: E402
+
+
+@pytest.mark.skipif(not os.environ.get("HTR_PG_DSN"), reason="no Postgres DSN; pgvector test skipped")
+def test_pgvector_roundtrip():
+    from htr_sp3.store import PgVectorStore
+
+    store = PgVectorStore()
+    store.create_schema()
+    store.add_many([(w, vectorize.word_to_vector(w)) for w in ["medical", "record"]])
+    store.create_index()
+    results = store.nearest(vectorize.word_to_vector("medisal"), k=1)
+    assert results[0][0] == "medical"

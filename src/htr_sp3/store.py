@@ -57,3 +57,66 @@ class InMemoryVectorStore:
         distances = 1.0 - sims
         order = np.argsort(distances)[:k]  # ascending distance
         return [(self._words[i], float(distances[i])) for i in order]
+
+
+class PgVectorStore:
+    """Production VectorStore backed by PostgreSQL + the pgvector extension.
+
+    Cosine distance uses pgvector's `<=>` operator. Vectors are stored as the pgvector `vector`
+    type; we pass them as the literal string "[v1,v2,...]" which the type accepts. psycopg v3 is
+    imported lazily so the rest of SP-3 (and the test suite) never requires a DB driver.
+    """
+
+    def __init__(self, dsn: str | None = None) -> None:
+        from . import config
+        self._dsn = dsn or config.PG_DSN
+        self._table = config.VOCAB_TABLE
+        self._dim = config.VECTOR_DIM
+
+    def _connect(self):
+        import psycopg
+        return psycopg.connect(self._dsn)
+
+    @staticmethod
+    def _to_literal(vector: List[float]) -> str:
+        # pgvector accepts a text literal like "[0.1,0.2,...]".
+        return "[" + ",".join(repr(float(x)) for x in vector) + "]"
+
+    def create_schema(self) -> None:
+        """Create the pgvector extension + vocab table (idempotent). Truncates existing rows."""
+        with self._connect() as conn, conn.cursor() as cur:
+            cur.execute("CREATE EXTENSION IF NOT EXISTS vector")
+            cur.execute(
+                f"CREATE TABLE IF NOT EXISTS {self._table} "
+                f"(word TEXT PRIMARY KEY, vec vector({self._dim}))"
+            )
+            cur.execute(f"TRUNCATE {self._table}")
+            conn.commit()
+
+    def add_many(self, rows: List[Row]) -> None:
+        with self._connect() as conn, conn.cursor() as cur:
+            cur.executemany(
+                f"INSERT INTO {self._table} (word, vec) VALUES (%s, %s) "
+                f"ON CONFLICT (word) DO UPDATE SET vec = EXCLUDED.vec",
+                [(word, self._to_literal(vec)) for word, vec in rows],
+            )
+            conn.commit()
+
+    def create_index(self) -> None:
+        """Build the HNSW cosine index after bulk insert (faster than inserting into an index)."""
+        with self._connect() as conn, conn.cursor() as cur:
+            cur.execute(
+                f"CREATE INDEX IF NOT EXISTS {self._table}_vec_hnsw "
+                f"ON {self._table} USING hnsw (vec vector_cosine_ops)"
+            )
+            conn.commit()
+
+    def nearest(self, vector: List[float], k: int) -> List[Hit]:
+        lit = self._to_literal(vector)
+        with self._connect() as conn, conn.cursor() as cur:
+            cur.execute(
+                f"SELECT word, vec <=> %s AS distance FROM {self._table} "
+                f"ORDER BY vec <=> %s LIMIT %s",
+                (lit, lit, k),
+            )
+            return [(word, float(dist)) for word, dist in cur.fetchall()]

@@ -11,3 +11,5 @@ huggingface_hub==0.23.4
 pillow==10.4.0
 # Dev / test only (CPU laptop):
 pytest==8.2.2
+psycopg[binary]>=3.1   # PostgreSQL driver for the pgvector store (SP-3)
+# Requires a PostgreSQL server with the `pgvector` extension available (CREATE EXTENSION vector).
