@@ -16,17 +16,8 @@ SRC = Path(__file__).resolve().parent.parent / "src"
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
-# Load credentials (e.g. HTR_PG_DSN) from a local .env file BEFORE importing any htr_sp3
-# module — config.py reads os.environ at import time, so the .env must populate the
-# environment first. python-dotenv is optional: if it is not installed we silently fall back
-# to whatever is already exported in the shell (the original behaviour, no .env required).
-try:
-    from dotenv import load_dotenv  # type: ignore
-
-    load_dotenv(SRC.parent / ".env")  # SRC.parent == repo root, where .env lives
-except ImportError:
-    pass
-
+# HTR_PG_DSN is read from a local .env (if present) automatically — htr_sp3.config calls
+# load_dotenv() at import time, so no explicit loading is needed here.
 from htr_sp1 import data  # noqa: E402
 from htr_sp3 import ingest  # noqa: E402
 from htr_sp3.store import PgVectorStore  # noqa: E402

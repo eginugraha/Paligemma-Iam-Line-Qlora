@@ -8,6 +8,18 @@ from __future__ import annotations
 
 import os
 
+# Load a local .env (optional) before reading os.environ, so HTR_ENGINE / HTR_RUNPOD_* /
+# HTR_M2_MAX_NEW_TOKENS can live in a gitignored .env at the repo root. load_dotenv does not
+# override real shell exports, and python-dotenv is optional (falls back to the shell env).
+# (htr_sp1.config also loads .env; calling it twice is harmless and idempotent.)
+try:
+    from pathlib import Path
+    from dotenv import load_dotenv
+
+    load_dotenv(Path(__file__).resolve().parents[2] / ".env")  # parents[2] == repo root
+except ImportError:
+    pass
+
 from htr_sp1 import config as sp1config
 from htr_sp2 import cot
 

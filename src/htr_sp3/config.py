@@ -7,6 +7,18 @@ from __future__ import annotations
 
 import os
 
+# Load a local .env (optional) before reading os.environ, so the DB credential HTR_PG_DSN can
+# live in a gitignored .env at the repo root instead of being exported in every shell. We load
+# it here, at the top of config, so the os.environ.get below already sees it. load_dotenv does
+# not override real shell exports, and python-dotenv is optional (falls back to the shell env).
+try:
+    from pathlib import Path
+    from dotenv import load_dotenv
+
+    load_dotenv(Path(__file__).resolve().parents[2] / ".env")  # parents[2] == repo root
+except ImportError:
+    pass
+
 # --- Character-vector shape -------------------------------------------------------------
 
 # Character n-gram size. Trigrams (n=3) balance specificity vs. robustness for spelling

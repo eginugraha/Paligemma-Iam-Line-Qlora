@@ -9,6 +9,21 @@ from __future__ import annotations
 import os
 import random
 
+# --- Load a local .env file (optional) -------------------------------------------------
+# Per-machine overrides and secrets (e.g. HTR_HUB_REPO_ID, HTR_OUTPUT_DIR, and the HF_TOKEN
+# that huggingface_hub reads when push_to_hub uploads the model) can live in a gitignored
+# .env at the repo root instead of being exported in every shell. We load it HERE, at the top
+# of config, so the os.environ.get(...) calls below already see those values. python-dotenv is
+# optional and load_dotenv does NOT override real shell exports (override defaults to False),
+# so a missing package or missing file simply falls back to the existing environment.
+try:
+    from pathlib import Path
+    from dotenv import load_dotenv
+
+    load_dotenv(Path(__file__).resolve().parents[2] / ".env")  # parents[2] == repo root
+except ImportError:
+    pass
+
 # --- Fixed design choices (do not change without revising the thesis methodology) ---
 
 # The exact base checkpoint we fine-tune. The "-448" suffix means it expects 448px images.
