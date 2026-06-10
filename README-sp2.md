@@ -29,8 +29,10 @@ Set the engine + credentials, then start the server:
 ## Deploy the RunPod worker
 
 `runpod/handler.py` is the Serverless entrypoint. Build an image from
-`requirements-runpod.txt`, set `HTR_BASE_MODEL_ID` and `HTR_ADAPTER_ID`, and point the
-endpoint at `handler.handler`. The wire format is in `htr_sp2.runpod_io`.
+`requirements-runpod.txt`, set `HTR_ADAPTER_ID` (the trained LoRA adapter repo/path), and point
+the endpoint at `handler.handler`. The base model is the fixed `htr_sp1.config.BASE_MODEL_ID`,
+loaded at the precision in `HTR_BASE_PRECISION` (default `4bit` — lightest VRAM, reproduces the
+baseline; `bf16`/`fp32` also available). The wire format is in `htr_sp2.runpod_io`.
 
 ## Tests
 

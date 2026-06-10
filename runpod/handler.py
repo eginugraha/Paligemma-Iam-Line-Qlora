@@ -18,26 +18,34 @@ from htr_sp1.inference import generate_transcription
 from htr_sp2 import runpod_io
 
 # Loaded lazily on first request and cached for the worker's lifetime (avoids reloading
-# the 3B model on every call). Replace the loader with the SP-1 model assembly used in
-# training/export; env vars point at the base model + adapter.
+# the 3B model on every call).
 _MODEL = None
 _PROCESSOR = None
 
 
 def _load_model():
-    """Load base PaliGemma + LoRA adapter once. Imports are local so the module imports
-    cheaply (and so CPU-only tooling never needs torch)."""
+    """Load the SP-1 base + LoRA adapter once, at the configured precision.
+
+    Reuses `htr_sp1.model.load_eval_model` — the exact, tested loader used for evaluation — so the
+    served model matches the reported numbers and the merge/precision logic lives in ONE place.
+
+    The base PaliGemma (`config.BASE_MODEL_ID`, a fixed thesis design constant) is downloaded from
+    the Hub and quantized in-memory; no merged model is needed. Precision is set by env
+    `HTR_BASE_PRECISION`:
+      - "4bit" (default): QLoRA config — lightest VRAM (~4 GB), reproduces the baseline numbers.
+                          Requires a CUDA GPU (bitsandbytes); the RunPod worker always has one.
+      - "bf16" / "fp32" : full-precision base (heavier; use if you want zero precision compromise).
+
+    `HTR_ADAPTER_ID` is the trained adapter (Hub repo or local path). Imports are local so the
+    module stays cheap to import (and CPU-only tooling never needs torch/bitsandbytes).
+    """
     global _MODEL, _PROCESSOR
     if _MODEL is None:
-        from peft import PeftModel
-        from transformers import PaliGemmaForConditionalGeneration, PaliGemmaProcessor
+        from htr_sp1.model import load_eval_model
 
-        base_id = os.environ["HTR_BASE_MODEL_ID"]      # e.g. google/paligemma-3b-pt-448
-        adapter_id = os.environ["HTR_ADAPTER_ID"]      # HF repo or local path to LoRA adapter
-        processor = PaliGemmaProcessor.from_pretrained(base_id)
-        base = PaliGemmaForConditionalGeneration.from_pretrained(base_id, device_map="auto")
-        _MODEL = PeftModel.from_pretrained(base, adapter_id)
-        _PROCESSOR = processor
+        adapter_id = os.environ["HTR_ADAPTER_ID"]                 # HF repo or local LoRA adapter
+        base_precision = os.environ.get("HTR_BASE_PRECISION", "4bit")
+        _MODEL, _PROCESSOR = load_eval_model(adapter_id, base_precision=base_precision)
     return _MODEL, _PROCESSOR
 
 
