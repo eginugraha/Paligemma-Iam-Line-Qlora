@@ -45,7 +45,8 @@ opt-in test that is **skipped** unless `HTR_PG_DSN` is set.
 
 These run outside the test loop:
 
-    # 1. Start PostgreSQL with pgvector, then point SP-3 at it
+    # 1. Start PostgreSQL with pgvector, then point SP-3 at it (export, or put it in .env —
+    #    config auto-loads .env; see .env.example). Easiest server: docker run pgvector/pgvector:pg16
     export HTR_PG_DSN="postgresql://user:pass@localhost:5432/htr"
 
     # 2. Build the IAM-train vocabulary and load it into pgvector (idempotent)

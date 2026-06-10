@@ -9,6 +9,10 @@ Results stream back as **NDJSON** (one event per line): `meta`, a `result` (or `
 per scenario, then `done`. CER/WER are computed (reusing `htr_sp1.metrics`) only when a
 `ground_truth` form field is supplied; otherwise they are `null`.
 
+When an SP-3 corrector is passed to `detect_stream`, two more scenarios stream after M1/M2:
+**M3** (RAG-corrected M1) and **M4** (RAG-corrected M2). Without a corrector the stream is
+unchanged. See `README-sp3.md`.
+
 ## Run locally (fake engine — no GPU)
 
     pip install -r requirements-backend.txt
@@ -25,6 +29,9 @@ Set the engine + credentials, then start the server:
     export HTR_RUNPOD_ENDPOINT_ID=...    # RunPod Serverless endpoint id
     export HTR_RUNPOD_API_KEY=...
     uvicorn htr_sp2.api:app --app-dir src
+
+These vars (and the worker's `HTR_ADAPTER_ID` / `HTR_BASE_PRECISION`) can instead live in a
+gitignored `.env` at the repo root — see `.env.example`.
 
 ## Deploy the RunPod worker
 

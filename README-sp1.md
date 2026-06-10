@@ -4,9 +4,12 @@ Fine-tunes `google/paligemma-3b-pt-448` with QLoRA on `Teklia/IAM-line` to trans
 handwriting lines. Produced for the HTR thesis (see `docs/superpowers/specs/2026-06-08-sp1-model-training-design.md`).
 
 ## Layout
-- `src/htr_sp1/` — tested, documented modules (config, data, metrics, model, inference, train, evaluate, export)
+- `src/htr_sp1/` — tested, documented modules (config, data, metrics, model, inference, train, evaluate, export, repush, cli)
+- `scripts/` — server entry points: `train_sp1.py`, `eval_sp1.py`, `repush_sp1.py`
 - `notebooks/sp1_train.ipynb` — Colab orchestration (run on a T4)
 - `tests/` — laptop-runnable unit tests (no GPU/downloads)
+- Credentials/config (`HF_TOKEN`, `HTR_HUB_REPO_ID`, `HTR_OUTPUT_DIR`) can live in a gitignored
+  `.env` at the repo root (see `.env.example`); `config.py` auto-loads it. Shell exports still win.
 
 ## Run the tests locally (no GPU)
 ```bash
@@ -18,7 +21,8 @@ python -m pytest
 1. Upload `src/`, `requirements.txt` to the Colab session (or clone the repo).
 2. Open `notebooks/sp1_train.ipynb`, set `HTR_HUB_REPO_ID` to your HF repo.
 3. Run top to bottom. The **sanity gate** (overfit 2 samples) must show loss→~0 before the full run.
-4. Outputs: test CER/WER (`test_metrics.json` on Drive) + adapter & merged repos on the Hub.
+4. Outputs: test CER/WER (`test_metrics.json`); the adapter + merged model are written to disk
+   under the output dir (`final_adapter/`, `merged/`) **then** pushed to the Hub.
 
 ## Train on a server / CLI (e.g. RunPod A5000 Pod) — no notebook, no Drive
 Same pipeline as the notebook, runnable over SSH. Persistence comes from the machine's own
@@ -48,13 +52,27 @@ huggingface-cli upload eginugraha/htr-sp1-run-artifacts /workspace/htr/train.log
 ps aux | grep python scripts/train_sp1.py
 - **Precision:** `--precision auto` (default) picks **bf16** on Ampere/Ada GPUs (A5000/3090/4090), **fp16** on a T4 — no code edit needed when moving machines.
 - **Config precedence:** CLI flag > env var (`HTR_*`) > `config.py` default. Override per run with `--epochs`, `--batch-size`, `--output-dir`, `--hub-repo`.
-- **Skip flags:** `--skip-sanity`, `--no-eval`, `--no-push` (the last also skips reload-validation).
+- **Skip flags:** `--skip-sanity`, `--no-eval`, `--no-push` (the last writes artifacts to disk but
+  skips the Hub upload + reload-validation).
 - Resumes automatically from the latest checkpoint in `--output-dir` if interrupted.
+
+## Artifacts & recovery (re-push without retraining)
+Every run writes its artifacts to disk **before** pushing, so a failed push never costs a retrain:
+- `<output_dir>/final_adapter/` — the LoRA adapter (+ processor)
+- `<output_dir>/merged/` — the self-contained merged fp16 model
+
+If the push failed (token/network) or you want to re-publish, re-push from disk — no retraining:
+```bash
+python scripts/repush_sp1.py --output-dir /workspace/outputs --hub-repo eginugraha/paligemma-iam-line-qlora
+```
+It reuses `<output_dir>/merged/` if present (else rebuilds it) and falls back to the latest
+`checkpoint-*` when `final_adapter/` is absent (older runs). All branching is in the unit-tested
+`htr_sp1.repush.resolve_repush_plan`.
 
 ## Inference interface (the contract SP-2 imports)
 ```python
 from htr_sp1.inference import generate_transcription
-# model, processor: a loaded PaliGemma (merged repo) + its processor
+# model, processor: a loaded PaliGemma (base+adapter, or the merged repo) + its processor
 text = generate_transcription(model, processor, pil_image)
 ```
 - **Input:** loaded model, processor, one `PIL.Image` of a handwriting line.
@@ -64,5 +82,6 @@ text = generate_transcription(model, processor, pil_image)
 ## Definition of Done
 - Full QLoRA run completed; val-CER stabilized.
 - Test CER/WER reported.
-- Adapter + merged pushed to the Hub (private).
+- Adapter + merged saved to disk (`final_adapter/`, `merged/`), then pushed to the Hub (private);
+  a failed push is recoverable from disk via `scripts/repush_sp1.py` (no retrain).
 - Fresh reload from the Hub transcribes sample images correctly (validation gate).
