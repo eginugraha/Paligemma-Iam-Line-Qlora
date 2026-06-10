@@ -32,9 +32,9 @@ version is published at `eginugraha/paligemma-iam-line-qlora-merged`.
 
 ### Model Description
 
-- **Developed by:** Egi Nugraha, Putu Bagus Indra Dermawan Kemuning, and Lawy Xenna L. Gaol — undergraduate thesis project (Hugging Face repo owner: [`eginugraha`](https://huggingface.co/eginugraha))
+- **Developed by:** Putu Bagus Indra Dermawan Kemuning, Lawy Xenna L. Gaol, and Egi Nugraha — undergraduate thesis project (Hugging Face repo owner: [`eginugraha`](https://huggingface.co/eginugraha))
 - **Funded by [optional]:** Not externally funded (self-funded undergraduate thesis)
-- **Shared by [optional]:** Egi Nugraha, Putu Bagus Indra Dermawan Kemuning, Lawy Xenna L. Gaol
+- **Shared by [optional]:** Putu Bagus Indra Dermawan Kemuning, Lawy Xenna L. Gaol, Egi Nugraha
 - **Model type:** LoRA adapter (PEFT) for a vision-language model — image-line → text (handwritten text recognition)
 - **Language(s) (NLP):** English (`en`)
 - **License:** `gemma` (inherited from the base model's Gemma license)
@@ -226,8 +226,8 @@ Python; `torch==2.3.1`, `transformers==4.42.4`, `peft==0.11.1`, `bitsandbytes==0
 **BibTeX:**
 
 ```bibtex
-@misc{nugraha_paligemma_iam_line_qlora,
-  author = {Nugraha, Egi and Kemuning, Putu Bagus Indra Dermawan and Gaol, Lawy Xenna L.},
+@misc{kemuning_paligemma_iam_line_qlora,
+  author = {Kemuning, Putu Bagus Indra Dermawan and Gaol, Lawy Xenna L. and Nugraha, Egi},
   title  = {PaliGemma-3B QLoRA adapter for IAM-line handwritten text recognition},
   year   = {2026},
   note   = {Undergraduate thesis project},
@@ -237,7 +237,7 @@ Python; `torch==2.3.1`, `transformers==4.42.4`, `peft==0.11.1`, `bitsandbytes==0
 
 **APA:**
 
-Nugraha, E., Kemuning, P. B. I. D., & Gaol, L. X. L. (2026). *PaliGemma-3B QLoRA adapter for IAM-line handwritten text recognition* [LoRA adapter]. Hugging Face. https://huggingface.co/eginugraha/paligemma-iam-line-qlora-adapter
+Kemuning, P. B. I. D., Gaol, L. X. L., & Nugraha, E. (2026). *PaliGemma-3B QLoRA adapter for IAM-line handwritten text recognition* [LoRA adapter]. Hugging Face. https://huggingface.co/eginugraha/paligemma-iam-line-qlora-adapter
 
 Please also credit the base model (PaliGemma, Google) and the dataset (IAM-line, Teklia; derived from the IAM Handwriting Database).
 
@@ -255,7 +255,7 @@ text-RAG lexical corrector). See the project repository for the full pipeline an
 
 ## Model Card Authors [optional]
 
-Egi Nugraha, Putu Bagus Indra Dermawan Kemuning, and Lawy Xenna L. Gaol (Hugging Face: [`eginugraha`](https://huggingface.co/eginugraha))
+Putu Bagus Indra Dermawan Kemuning, Lawy Xenna L. Gaol, and Egi Nugraha (Hugging Face: [`eginugraha`](https://huggingface.co/eginugraha))
 
 ## Model Card Contact
 
