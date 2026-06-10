@@ -58,3 +58,10 @@ def test_detect_rejects_undecodable_image():
         files={"file": ("bad.png", b"not really an image", "image/png")},
     )
     assert resp.status_code == 422
+
+
+def test_cors_header_present_for_browser_origin():
+    # A browser request carries an Origin header; CORSMiddleware must echo an
+    # Access-Control-Allow-Origin so a frontend on another origin can read the response.
+    resp = client.get("/health", headers={"Origin": "http://localhost:5173"})
+    assert resp.headers["access-control-allow-origin"] == "*"

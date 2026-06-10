@@ -40,6 +40,7 @@ from __future__ import annotations
 import io
 
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from PIL import Image, UnidentifiedImageError
 
@@ -53,6 +54,9 @@ from htr_sp2.engine import get_engine
 # orchestrator stays HTTP-agnostic.
 from htr_sp2.orchestrator import detect_stream
 
+from htr_sp2 import config
+from htr_sp2.corrector_factory import get_corrector
+
 # ---------------------------------------------------------------------------
 # FastAPI application
 # ---------------------------------------------------------------------------
@@ -65,6 +69,16 @@ app = FastAPI(
         "Streams NDJSON results from two PaliGemma inference scenarios "
         "(M1 baseline and M2 chain-of-thought) for a single uploaded image."
     ),
+)
+
+# CORS so the SP-4 browser frontend (a different origin, e.g. the Vite dev server) can call
+# the API. Credentials are not used, so a wildcard origin is safe. Origins come from config
+# (env HTR_CORS_ORIGINS, default "*").
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=config.CORS_ORIGINS,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 
@@ -154,10 +168,13 @@ async def detect(
     # In production, set the ENGINE env var to "runpod".
     engine = get_engine()
 
-    # detect_stream is a synchronous generator; it yields one NDJSON line string
-    # per event (meta, result×N, done). StreamingResponse consumes the generator
-    # and flushes each yielded chunk to the client as it arrives.
-    stream = detect_stream(engine, image, file.filename or "upload", ground_truth)
+    # get_corrector() returns None unless HTR_ENABLE_RAG is set (then a cached PgVector-backed
+    # RagCorrector). When present, detect_stream additionally emits m3 (corrected m1) and m4
+    # (corrected m2); when None, the stream is M1/M2 only — unchanged behaviour.
+    corrector = get_corrector()
+    stream = detect_stream(
+        engine, image, file.filename or "upload", ground_truth, corrector=corrector
+    )
 
     # --- 4. Return the streaming response -------------------------------------
     # media_type="application/x-ndjson" tells clients the body is newline-delimited
