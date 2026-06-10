@@ -41,4 +41,6 @@ validated on RunPod.
 
 ## Scope
 
-M1 + M2 only. M3/M4 (RAG/pgvector) and the local GGUF engine are separate sub-projects.
+M1 + M2 only. M3/M4 (RAG/pgvector) live in SP-3 (`README-sp3.md`) and plug into this
+backend via `detect_stream`'s optional `corrector`; the local GGUF engine is a separate
+sub-project.
