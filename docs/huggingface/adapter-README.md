@@ -33,18 +33,18 @@ version is published at `eginugraha/paligemma-iam-line-qlora-merged`.
 ### Model Description
 
 - **Developed by:** Putu Bagus Indra Dermawan Kemuning, Lawy Xenna L. Gaol, and Egi Nugraha — undergraduate thesis project (Hugging Face repo owner: [`eginugraha`](https://huggingface.co/eginugraha))
-- **Funded by [optional]:** Not externally funded (self-funded undergraduate thesis)
-- **Shared by [optional]:** Putu Bagus Indra Dermawan Kemuning, Lawy Xenna L. Gaol, Egi Nugraha
+- **Funded by:** Not externally funded (self-funded undergraduate thesis)
+- **Shared by:** Putu Bagus Indra Dermawan Kemuning, Lawy Xenna L. Gaol, Egi Nugraha
 - **Model type:** LoRA adapter (PEFT) for a vision-language model — image-line → text (handwritten text recognition)
 - **Language(s) (NLP):** English (`en`)
 - **License:** `gemma` (inherited from the base model's Gemma license)
-- **Finetuned from model [optional]:** [`google/paligemma-3b-pt-448`](https://huggingface.co/google/paligemma-3b-pt-448)
+- **Finetuned from model:** [`google/paligemma-3b-pt-448`](https://huggingface.co/google/paligemma-3b-pt-448)
 
-### Model Sources [optional]
+### Model Sources
 
-- **Repository:** GitHub — `eginugraha/Paligemma-Iam-Line-Qlora` (SP-1 sub-project)
-- **Paper [optional]:** Undergraduate thesis (in progress; not yet published)
-- **Demo [optional]:** N/A
+- **Repository:** GitHub — [`https://github.com/eginugraha/Paligemma-Iam-Line-Qlora`](https://github.com/eginugraha/Paligemma-Iam-Line-Qlora)
+- **Paper:** Undergraduate thesis (in progress; not yet published)
+- **Demo:** N/A
 
 ## Uses
 
@@ -53,7 +53,7 @@ version is published at `eginugraha/paligemma-iam-line-qlora-merged`.
 Transcribe a single line of English handwriting (IAM-style) to text. Use the exact training
 prompt `transcribe the handwritten text\n`. Suitable for research and thesis reproduction.
 
-### Downstream Use [optional]
+### Downstream Use
 
 Serves as the **M1 baseline** model in a larger HTR comparison: its output is consumed by a
 FastAPI backend (SP-2) and optionally repaired by a text-RAG spelling corrector (SP-3, scenarios
@@ -133,7 +133,7 @@ For full precision instead of 4-bit, drop `quantization_config=bnb` and pass `to
 
 ### Training Procedure
 
-#### Preprocessing [optional]
+#### Preprocessing
 
 - Images converted to 3-channel RGB; resized to 448×448 by the PaliGemma processor.
 - Each example encoded by the processor as prompt (`transcribe the handwritten text\n`) + image,
@@ -149,7 +149,7 @@ For full precision instead of 4-bit, drop `quantization_config=bnb` and pass `to
 - **Max target tokens:** 64
 - **Seed:** fixed for reproducibility
 
-#### Speeds, Sizes, Times [optional]
+#### Speeds, Sizes, Times
 
 - ~4 h 11 m wall-clock on a single GPU; final train loss ≈ 0.64, eval loss ≈ 0.75.
 - Adapter size: a few tens of MB (LoRA weights only; the ~2.92B-parameter base is not stored here).
@@ -185,7 +185,7 @@ Measured with the base loaded in **4-bit + adapter** (the unmerged inference pat
 
 A healthy, reportable first QLoRA baseline for line-level English HTR on IAM.
 
-## Model Examination [optional]
+## Model Examination
 
 Error profile is dominated by minor character substitutions; a small tail shows repetition
 collapse on hard/ambiguous lines, mitigable with repetition-control generation flags.
@@ -196,11 +196,11 @@ Carbon emissions can be estimated using the [Machine Learning Impact calculator]
 
 - **Hardware Type:** 1× NVIDIA RTX A6000 (48 GB)
 - **Hours used:** ~4.2
-- **Cloud Provider:** Rented/remote GPU instance
+- **Cloud Provider:** Runpod.io
 - **Compute Region:** Not recorded
 - **Carbon Emitted:** Not measured
 
-## Technical Specifications [optional]
+## Technical Specifications
 
 ### Model Architecture and Objective
 
@@ -221,7 +221,7 @@ end-of-epoch evaluation over PaliGemma's ~257k-token vocabulary, which is why a 
 Python; `torch==2.3.1`, `transformers==4.42.4`, `peft==0.11.1`, `bitsandbytes==0.43.1`,
 `accelerate==0.31.0`, `datasets==2.20.0`, `jiwer==3.0.4`.
 
-## Citation [optional]
+## Citation
 
 **BibTeX:**
 
@@ -241,19 +241,19 @@ Kemuning, P. B. I. D., Gaol, L. X. L., & Nugraha, E. (2026). *PaliGemma-3B QLoRA
 
 Please also credit the base model (PaliGemma, Google) and the dataset (IAM-line, Teklia; derived from the IAM Handwriting Database).
 
-## Glossary [optional]
+## Glossary
 
 - **CER** — Character Error Rate: edit distance between prediction and reference, normalized by reference length.
 - **WER** — Word Error Rate: the same at word granularity.
 - **QLoRA** — fine-tuning a 4-bit-quantized base with a small trainable LoRA adapter.
 - **LoRA** — Low-Rank Adaptation: trains small rank-decomposition matrices instead of full weights.
 
-## More Information [optional]
+## More Information
 
 This adapter is the M1 baseline of a four-scenario HTR thesis (baseline, chain-of-thought, and a
 text-RAG lexical corrector). See the project repository for the full pipeline and evaluation code.
 
-## Model Card Authors [optional]
+## Model Card Authors
 
 Putu Bagus Indra Dermawan Kemuning, Lawy Xenna L. Gaol, and Egi Nugraha (Hugging Face: [`eginugraha`](https://huggingface.co/eginugraha))
 
