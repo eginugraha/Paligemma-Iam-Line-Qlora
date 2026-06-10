@@ -55,8 +55,8 @@ These run outside the test loop:
     #    --pairs is a JSON list of {"prediction": ..., "ground_truth": ...}
     python scripts/tune_sp3.py --pairs val_m1_predictions.json --out tune_sp3.json
 
-    # 4. Verify the live DB path once
-    HTR_PG_DSN=... pytest tests/test_sp3_store.py -k pgvector
+    # 4. Verify the live DB path once (opt-in; needs HTR_PG_DSN set too)
+    HTR_PG_TEST=1 pytest tests/test_sp3_store.py -k pgvector
 
 Then set the tuned value as `htr_sp3.config.DEFAULT_THRESHOLD` and pass a real `RagCorrector`
 into the SP-2 API call site to activate M3/M4 in production.
