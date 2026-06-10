@@ -190,13 +190,29 @@ def main(argv: Optional[Sequence[str]] = None) -> RunConfig:
         with open(os.path.join(rc.output_dir, "test_metrics.json"), "w") as f:
             json.dump(report, f, indent=2)
 
-    # 6. Export adapter + merged to the Hub, then reload-validate (definition of done).
-    if not rc.no_push:
-        export.push_adapter(model, processor, export.adapter_repo_id(rc.hub_repo))
-        # Merge happens on a full-precision base (not the 4-bit one). Match the run's precision:
-        # bf16 on Ampere/Ada, fp16 on a T4.
-        export.push_merged(model, processor, export.merged_repo_id(rc.hub_repo),
-                           compute_dtype="bfloat16" if rc.bf16 else "float16")
+    # 6. Persist artifacts to disk (definition of done), THEN push. Artifacts are written before
+    #    any network call, so a push failure never loses the run — re-push later from disk.
+    status = export.save_and_push(
+        model, processor,
+        output_dir=rc.output_dir, hub_repo=rc.hub_repo,
+        compute_dtype="bfloat16" if rc.bf16 else "float16",
+        push=not rc.no_push,
+    )
+    print(f"[SP-1] saved adapter -> {status['adapter_dir']}")
+    print(f"[SP-1] saved merged  -> {status['merged_dir']}")
+
+    if rc.no_push:
+        print("[SP-1] --no-push: wrote artifacts to disk, skipped Hub upload and reload-validation.")
+    elif not status["pushed"]:
+        # Push failed but the run is safe on disk. Print the exact recovery command.
+        print(f"[SP-1] PUSH FAILED: {status['error']}")
+        print("[SP-1] artifacts are safe on disk. Re-push later with:")
+        # Include --compute-dtype so a later rebuild (if merged/ were removed) matches this run's
+        # precision exactly (bf16 on Ampere/Ada, fp16 on a T4).
+        dtype_flag = "bfloat16" if rc.bf16 else "float16"
+        print(f"    python scripts/repush_sp1.py --output-dir {rc.output_dir} "
+              f"--hub-repo {rc.hub_repo} --compute-dtype {dtype_flag}")
+    else:
         print("[SP-1] pushed:", export.adapter_repo_id(rc.hub_repo),
               "and", export.merged_repo_id(rc.hub_repo))
 

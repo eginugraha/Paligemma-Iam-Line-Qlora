@@ -43,7 +43,14 @@ import pytest  # noqa: E402
 from htr_sp3.config import VOCAB_TABLE  # noqa: E402
 
 
-@pytest.mark.skipif(not os.environ.get("HTR_PG_DSN"), reason="no Postgres DSN; pgvector test skipped")
+# Opt-in guard: this hits a REAL database, so it only runs when explicitly requested with
+# HTR_PG_TEST=1. We do NOT gate on HTR_PG_DSN — config auto-loads it from .env (it almost always
+# has a value now), so the DSN's presence no longer means "a live Postgres is available". The DSN
+# itself (real connection string) is still read from the environment by PgVectorStore when run.
+@pytest.mark.skipif(
+    not os.environ.get("HTR_PG_TEST"),
+    reason="set HTR_PG_TEST=1 (with a live Postgres+pgvector and HTR_PG_DSN) to run this test",
+)
 def test_pgvector_roundtrip():
     from htr_sp3.store import PgVectorStore
 
