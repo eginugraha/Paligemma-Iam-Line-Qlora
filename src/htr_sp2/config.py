@@ -78,3 +78,16 @@ M2_STATUS_TAG = "Reasoned"
 # frontend table. Kept here with the M1/M2 tags so all scenario labels live in one file.
 M3_STATUS_TAG = "Corrected"
 M4_STATUS_TAG = "Optimal"
+
+# ---------------------------------------------------------------------------
+# RAG correction (M3/M4) and CORS — added for the SP-4 frontend
+# ---------------------------------------------------------------------------
+
+# M3/M4 RAG correction is OFF unless explicitly enabled. When on, the API builds a
+# PgVectorStore-backed corrector, which needs a live, ingested Postgres+pgvector
+# (run scripts/ingest_sp3.py first). Off by default so M1/M2 behaviour is unchanged.
+ENABLE_RAG = os.environ.get("HTR_ENABLE_RAG", "0").lower() in ("1", "true", "yes")
+
+# Browser origins allowed to call the API (CORS), comma-separated. Defaults to "*" for the
+# prototype frontend; credentials are not used so the wildcard is safe.
+CORS_ORIGINS = os.environ.get("HTR_CORS_ORIGINS", "*").split(",")
