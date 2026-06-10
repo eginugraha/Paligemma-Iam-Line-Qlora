@@ -172,3 +172,40 @@ def push_folder(local_dir, repo_id, *, commit_message=None, private=True, allow_
         folder_path=local_dir, repo_id=repo_id, repo_type="model",
         commit_message=commit_message, allow_patterns=allow_patterns,
     )
+
+
+def save_and_push(model, processor, *, output_dir, hub_repo, compute_dtype="bfloat16", push=True):
+    """Persist artifacts to disk, then (optionally) push them — the SP-1 definition of done.
+
+    Order matters: the adapter and merged model are written to disk BEFORE any network call, so a
+    push failure never loses the run — it can be re-pushed later from disk (scripts/repush_sp1.py).
+    Only the push step may fail; it is caught and reported via the returned status.
+
+    Args:
+        model: The PEFT-wrapped model (adapter source).
+        processor: The matching processor.
+        output_dir: Run directory; artifacts go to <output_dir>/final_adapter and <output_dir>/merged.
+        hub_repo: Base Hub repo id; adapter/merged are pushed to its -adapter / -merged repos.
+        compute_dtype: Full-precision dtype for the merge ("bfloat16" on Ampere/Ada, "float16" on T4).
+        push: When False (e.g. --no-push), write both dirs but skip the network entirely.
+
+    Returns:
+        {"adapter_dir": str, "merged_dir": str, "pushed": bool, "error": str | None}.
+    """
+    import os
+
+    adapter_dir = save_adapter(model, processor, os.path.join(output_dir, "final_adapter"))
+    merged_dir = merge_to_dir(adapter_dir, os.path.join(output_dir, "merged"),
+                              compute_dtype=compute_dtype)
+
+    status = {"adapter_dir": adapter_dir, "merged_dir": merged_dir, "pushed": False, "error": None}
+    if not push:
+        return status
+
+    try:
+        push_folder(adapter_dir, adapter_repo_id(hub_repo), allow_patterns=ADAPTER_ALLOW_PATTERNS)
+        push_folder(merged_dir, merged_repo_id(hub_repo))
+        status["pushed"] = True
+    except Exception as exc:  # network/auth failure must not lose the on-disk run
+        status["error"] = str(exc)
+    return status

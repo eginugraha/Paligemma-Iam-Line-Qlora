@@ -139,3 +139,63 @@ def test_merge_to_dir_reloads_fullprecision_base_and_saves(monkeypatch):
     merged.save_pretrained.assert_called_once_with("/tmp/run/merged")
     fake_processor.save_pretrained.assert_called_once_with("/tmp/run/merged")
     merged.push_to_hub.assert_not_called()
+
+
+def _patch_save_and_merge(monkeypatch):
+    """Stub the disk-writing steps so save_and_push can be tested with no model/disk."""
+    monkeypatch.setattr(export, "save_adapter",
+                        lambda m, p, d: d)                       # returns the adapter dir
+    monkeypatch.setattr(export, "merge_to_dir",
+                        lambda src, d, **k: d)                   # returns the merged dir
+
+
+def test_save_and_push_happy_path(monkeypatch):
+    _patch_save_and_merge(monkeypatch)
+    pushed = []
+    monkeypatch.setattr(export, "push_folder",
+                        lambda d, repo, **k: pushed.append((d, repo)))
+
+    status = export.save_and_push(
+        MagicMock(), MagicMock(), output_dir="/run", hub_repo="user/repo",
+    )
+
+    assert status["adapter_dir"].endswith("final_adapter")
+    assert status["merged_dir"].endswith("merged")
+    assert status["pushed"] is True
+    assert status["error"] is None
+    # adapter dir -> adapter repo (with allow patterns), merged dir -> merged repo.
+    assert pushed == [
+        ("/run/final_adapter", "user/repo-adapter"),
+        ("/run/merged", "user/repo-merged"),
+    ]
+
+
+def test_save_and_push_catches_push_failure(monkeypatch):
+    _patch_save_and_merge(monkeypatch)
+
+    def boom(d, repo, **k):
+        raise RuntimeError("network down")
+    monkeypatch.setattr(export, "push_folder", boom)
+
+    status = export.save_and_push(
+        MagicMock(), MagicMock(), output_dir="/run", hub_repo="user/repo",
+    )
+
+    # Artifacts are still reported (they were written before the push), and the run is NOT lost.
+    assert status["adapter_dir"].endswith("final_adapter")
+    assert status["merged_dir"].endswith("merged")
+    assert status["pushed"] is False
+    assert "network down" in status["error"]
+
+
+def test_save_and_push_skips_push_when_disabled(monkeypatch):
+    _patch_save_and_merge(monkeypatch)
+    monkeypatch.setattr(export, "push_folder",
+                        lambda *a, **k: (_ for _ in ()).throw(AssertionError("must not push")))
+
+    status = export.save_and_push(
+        MagicMock(), MagicMock(), output_dir="/run", hub_repo="user/repo", push=False,
+    )
+
+    assert status["pushed"] is False
+    assert status["error"] is None
