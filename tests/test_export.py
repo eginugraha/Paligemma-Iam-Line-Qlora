@@ -80,3 +80,23 @@ def test_push_folder_creates_repo_then_uploads(monkeypatch):
         folder_path="/tmp/run/merged", repo_id="user/repo-merged",
         repo_type="model", commit_message="run 2026", allow_patterns=None,
     )
+
+
+def test_save_adapter_writes_adapter_and_processor():
+    model = MagicMock()
+    processor = MagicMock()
+
+    result = export.save_adapter(model, processor, "/tmp/run/final_adapter")
+
+    assert result == "/tmp/run/final_adapter"
+    model.save_pretrained.assert_called_once_with("/tmp/run/final_adapter")
+    processor.save_pretrained.assert_called_once_with("/tmp/run/final_adapter")
+
+
+def test_adapter_allow_patterns_cover_adapter_and_processor_files():
+    # The allowlist must grab the LoRA weights/config AND the processor/tokenizer files, so a
+    # checkpoint-sourced push uploads a clean adapter (no optimizer/rng training state).
+    pats = export.ADAPTER_ALLOW_PATTERNS
+    assert "adapter_model.safetensors" in pats
+    assert "adapter_config.json" in pats
+    assert any("preprocessor" in p for p in pats)

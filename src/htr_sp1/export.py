@@ -78,6 +78,39 @@ def push_merged(model, processor, repo_id: str, *, compute_dtype: str = "bfloat1
     processor.push_to_hub(repo_id, private=True)
 
 
+# Files that make up a self-contained, loadable adapter (LoRA weights + its config + the
+# processor/tokenizer). When the push source is a FULL Trainer checkpoint (recovery fallback),
+# this allowlist uploads ONLY these to the adapter repo and skips optimizer/scheduler/rng state.
+ADAPTER_ALLOW_PATTERNS = [
+    "adapter_model.safetensors",
+    "adapter_model.bin",
+    "adapter_config.json",
+    "tokenizer.json",
+    "tokenizer_config.json",
+    "tokenizer.model",
+    "special_tokens_map.json",
+    "added_tokens.json",
+    "preprocessor_config.json",
+    "processor_config.json",
+]
+
+
+def save_adapter(model, processor, adapter_dir):
+    """Write the trained LoRA adapter (+ processor) to *adapter_dir* and return the path.
+
+    PEFT's save_pretrained writes ONLY the small adapter weights, not the frozen base. The
+    processor is saved alongside so the directory is self-contained for loading/pushing.
+
+    Args:
+        model: The PEFT-wrapped model whose adapter weights are written.
+        processor: The matching processor.
+        adapter_dir: Destination directory (e.g. <output_dir>/final_adapter).
+    """
+    model.save_pretrained(adapter_dir)
+    processor.save_pretrained(adapter_dir)
+    return adapter_dir
+
+
 def push_folder(local_dir, repo_id, *, commit_message=None, private=True, allow_patterns=None):
     """Upload a local directory to a Hub repo (the ONE place a push happens).
 
