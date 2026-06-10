@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-"""SP-1 training entry point for servers/CLI (e.g. a RunPod A5000 Pod).
+"""SP-1 training entry point for servers/CLI (e.g. a RunPod A6000 Pod).
 
 This is a *thin* launcher: it puts the repo's `src/` on the import path (so the package works
 without `pip install -e .`) and hands off to `htr_sp1.cli.main`, where all the real logic and

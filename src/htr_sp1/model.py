@@ -16,7 +16,7 @@ def build_quant_config(compute_dtype: str = "float16") -> Dict[str, Any]:
 
     NF4 is the 4-bit format from the QLoRA paper. The default compute dtype is float16 because
     the Colab T4 (Turing) supports fp16 but NOT bf16 — using bf16 there would error. On an
-    Ampere/Ada GPU (e.g. RunPod A5000) the caller passes "bfloat16" for faster, more stable
+    Ampere/Ada GPU (e.g. RunPod A6000) the caller passes "bfloat16" for faster, more stable
     compute. Returned as a dict so tests can assert on it without importing bitsandbytes.
 
     Args:

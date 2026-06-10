@@ -24,33 +24,29 @@ python -m pytest
 4. Outputs: test CER/WER (`test_metrics.json`); the adapter + merged model are written to disk
    under the output dir (`final_adapter/`, `merged/`) **then** pushed to the Hub.
 
-## Train on a server / CLI (e.g. RunPod A5000 Pod) — no notebook, no Drive
+## Train on a server / CLI (e.g. RunPod A6000 Pod) — no notebook, no Drive
 Same pipeline as the notebook, runnable over SSH. Persistence comes from the machine's own
 disk (e.g. a RunPod Network Volume at `/workspace`), so there is **no Colab/Drive mounting**.
 
 ```bash
-git clone https://github.com/eginugraha/Paligemma-Iam-Line-Qlora.git /workspace/htr && cd /workspace/htr
+git clone <repository> /workspace/htr && cd /workspace/htr
 pip install -r requirements.txt
 export HTR_OUTPUT_DIR="/workspace/outputs"          # persistent dir for checkpoints
-export HTR_HUB_REPO_ID="eginugraha/paligemma-iam-line-qlora"
+export HTR_HUB_REPO_ID="HF_ID/paligemma-iam-line-qlora"
 huggingface-cli login                               # token with write access
 
 python scripts/train_sp1.py                         # full pipeline; precision auto-detected
 python scripts/train_sp1.py --help                  # all flags
 nohup python scripts/train_sp1.py > train.log 2>&1 &   # headless; tail -f train.log
-
-# 1) SMOKE TEST dulu — 50 sampel, cepat, pastikan pipeline jalan:
-python scripts/eval_sp1.py --base-precision bf16 --limit 50
-
-# 2) Kalau lancar, full apple-to-apple (masing-masing ~8 menit, seperti eval kemarin):
-python scripts/eval_sp1.py --base-precision 4bit --out test_metrics_4bit.json
-python scripts/eval_sp1.py --base-precision bf16 --out test_metrics_bf16.json
+python scripts/eval_sp1.py --base-precision bf16 --limit 50 # smoke test 50 sample
+python scripts/eval_sp1.py --base-precision 4bit --out test_metrics_4bit.json # eval with base precision 4 bit
+python scripts/eval_sp1.py --base-precision bf16 --out test_metrics_bf16.json # eval with base precision 16 bit
 
 huggingface-cli upload eginugraha/htr-sp1-run-artifacts /workspace/outputs/test_metrics.json test_metrics.json --repo-type dataset
 huggingface-cli upload eginugraha/htr-sp1-run-artifacts /workspace/htr/train.log train.log --repo-type dataset
 ```
 ps aux | grep python scripts/train_sp1.py
-- **Precision:** `--precision auto` (default) picks **bf16** on Ampere/Ada GPUs (A5000/3090/4090), **fp16** on a T4 — no code edit needed when moving machines.
+- **Precision:** `--precision auto` (default) picks **bf16** on Ampere/Ada GPUs (A6000/3090/4090), **fp16** on a T4 — no code edit needed when moving machines.
 - **Config precedence:** CLI flag > env var (`HTR_*`) > `config.py` default. Override per run with `--epochs`, `--batch-size`, `--output-dir`, `--hub-repo`.
 - **Skip flags:** `--skip-sanity`, `--no-eval`, `--no-push` (the last writes artifacts to disk but
   skips the Hub upload + reload-validation).

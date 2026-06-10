@@ -21,7 +21,7 @@ Pipeline yang **sama persis** bisa dijalankan lewat dua jalur:
 | Jalur | File | Untuk |
 |---|---|---|
 | **Notebook** | `notebooks/sp1_train.ipynb` | interaktif (Colab/Jupyter) — lihat tiap cell, cocok untuk eksplorasi |
-| **CLI / skrip** | `scripts/train_sp1.py` → `htr_sp1/cli.py` | server via SSH (mis. RunPod A5000 Pod) — tanpa Jupyter, tanpa Drive |
+| **CLI / skrip** | `scripts/train_sp1.py` → `htr_sp1/cli.py` | server via SSH (mis. RunPod A6000 Pod) — tanpa Jupyter, tanpa Drive |
 
 Jalur CLI memetakan langkah-langkah di bawah ke fungsi `cli.main()`:
 
@@ -29,10 +29,10 @@ Jalur CLI memetakan langkah-langkah di bawah ke fungsi `cli.main()`:
 build_parser → resolve_config (CLI flag > env var HTR_* > default config.py)
   → set_seed → load_iam_splits → load_trainable_model(compute_dtype)
   → [sanity gate]  → run_training(bf16=…)
-  → [evaluate_split + simpan metrics]  → [push_adapter+push_merged + validation gate]
+  → [evaluate_split + simpan metrics]  → [save_and_push (adapter+merged ke disk lalu Hub) + validation gate]
 ```
 - **`--precision auto`** memanggil `config.detect_precision()` → `bf16` di GPU Ampere/Ada
-  (A5000/3090/4090), `fp16` di T4 — tanpa edit kode saat pindah mesin.
+  (A6000/3090/4090), `fp16` di T4 — tanpa edit kode saat pindah mesin.
 - Fungsi murni (`build_parser`, `resolve_precision`, `precision_to_settings`,
   `resolve_config`) teruji unit; `main()` adalah lem GPU seperti notebook.
 - Contoh: `python scripts/train_sp1.py --skip-sanity --no-push` (lihat `--help` untuk semua flag).

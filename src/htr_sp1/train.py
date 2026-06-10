@@ -31,7 +31,8 @@ def build_training_args(output_dir: str, *, bf16: bool = False) -> Dict[str, Any
         "per_device_train_batch_size": config.PER_DEVICE_TRAIN_BATCH_SIZE,
         # MUST set this explicitly. HF defaults per_device_eval_batch_size to 8 when omitted, and
         # an eval batch of 8 over PaliGemma's ~257k vocab allocates ~8 GiB for the cross-entropy
-        # logits in one shot -> CUDA OOM at the first end-of-epoch eval (24GB A5000). Keep it at 1.
+        # logits in one shot -> CUDA OOM at the first end-of-epoch eval on a 24 GB GPU (that OOM
+        # is exactly why training moved to a 48 GB A6000). Keep eval at 1.
         "per_device_eval_batch_size": config.PER_DEVICE_EVAL_BATCH_SIZE,
         "gradient_accumulation_steps": config.GRAD_ACCUMULATION_STEPS,
         "learning_rate": config.LEARNING_RATE,
@@ -43,7 +44,7 @@ def build_training_args(output_dir: str, *, bf16: bool = False) -> Dict[str, Any
         "gradient_checkpointing": True,   # memory-for-compute trade; needed on 16GB
         # Exactly one mixed-precision mode on — never both (HF raises if both are True).
         "fp16": not bf16,                 # T4 (Turing) supports fp16, not bf16
-        "bf16": bf16,                     # Ampere/Ada (e.g. A5000) supports bf16
+        "bf16": bf16,                     # Ampere/Ada (e.g. A6000) supports bf16
         "save_strategy": "epoch",         # checkpoint every epoch -> resumable
         "evaluation_strategy": "epoch",   # eval each epoch; live signal is eval LOSS (Trainer
         # does not generate during eval), while true val/test CER is computed via evaluate_split.

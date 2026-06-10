@@ -3,7 +3,7 @@
 This module is the script equivalent of `notebooks/sp1_train.ipynb`: it runs the exact same
 pipeline (set seed -> load data -> load 4-bit+LoRA model -> sanity gate -> full fine-tune ->
 evaluate -> save metrics -> push to Hub -> reload-validation), but as a plain `.py` you can
-run over SSH on a server (e.g. a RunPod A5000 Pod) without Jupyter or any Colab/Drive glue.
+run over SSH on a server (e.g. a RunPod A6000 Pod) without Jupyter or any Colab/Drive glue.
 
 Design split (so most of it is unit-testable without a GPU):
   - `build_parser`, `resolve_precision`, `precision_to_settings`, `resolve_config` are PURE:

@@ -86,7 +86,7 @@ def detect_precision() -> str:
 
     bfloat16 is faster and numerically more stable than float16, but only Ampere/Ada-class
     GPUs (and newer) support it — a Turing T4 does NOT. We probe torch at runtime so the same
-    code auto-adapts when moved between machines (e.g. Colab T4 -> a RunPod A5000) without a
+    code auto-adapts when moved between machines (e.g. Colab T4 -> a RunPod A6000) without a
     code edit. torch is imported lazily so this module stays importable on a CPU-only laptop.
 
     Returns:

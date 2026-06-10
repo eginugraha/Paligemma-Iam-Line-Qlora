@@ -11,7 +11,7 @@ It reuses the package's real evaluation code (`evaluate.evaluate_split` + `infer
 methodology is identical to the training run -- only the base precision changes.
 
 WHERE TO RUN
-On a CUDA GPU machine (e.g. the A5000 used for training). It will NOT run on a Mac/CPU for the
+On a CUDA GPU machine (e.g. the A6000 used for training). It will NOT run on a Mac/CPU for the
 4bit mode (bitsandbytes is CUDA-only), and full-precision modes on CPU would be far too slow.
 
 USAGE
