@@ -76,3 +76,29 @@ def push_merged(model, processor, repo_id: str, *, compute_dtype: str = "bfloat1
 
     merged.push_to_hub(repo_id, private=True)
     processor.push_to_hub(repo_id, private=True)
+
+
+def push_folder(local_dir, repo_id, *, commit_message=None, private=True, allow_patterns=None):
+    """Upload a local directory to a Hub repo (the ONE place a push happens).
+
+    Uploading to an existing repo adds a new commit (same-named files are overwritten, but the
+    Hub keeps history, so it is reversible). No model is loaded into memory — we ship the bytes
+    already written to disk, which is fast and cheap even for the ~5.8 GB merged model.
+
+    Args:
+        local_dir: Directory whose contents are uploaded (e.g. an adapter or merged-model dir).
+        repo_id: Target repo id (use adapter_repo_id(...) / merged_repo_id(...)).
+        commit_message: Optional message recorded on the Hub commit (handy for run provenance).
+        private: Create the repo private (thesis artifact, not public) if it does not exist.
+        allow_patterns: Optional list of globs to restrict which files are uploaded (used to push
+                        ONLY adapter/processor files when the source is a full Trainer checkpoint).
+    """
+    from huggingface_hub import HfApi
+
+    api = HfApi()
+    # exist_ok=True: re-pushing to an existing repo is normal (recovery), not an error.
+    api.create_repo(repo_id, repo_type="model", private=private, exist_ok=True)
+    api.upload_folder(
+        folder_path=local_dir, repo_id=repo_id, repo_type="model",
+        commit_message=commit_message, allow_patterns=allow_patterns,
+    )

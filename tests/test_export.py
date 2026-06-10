@@ -62,3 +62,21 @@ def test_push_merged_reloads_fullprecision_base_then_merges(monkeypatch):
     merged.push_to_hub.assert_called_once_with("user/repo-merged", private=True)
     model.push_to_hub.assert_not_called()
     processor.push_to_hub.assert_called_once_with("user/repo-merged", private=True)
+
+
+def test_push_folder_creates_repo_then_uploads(monkeypatch):
+    import huggingface_hub
+
+    fake_api = MagicMock()
+    monkeypatch.setattr(huggingface_hub, "HfApi", MagicMock(return_value=fake_api))
+
+    export.push_folder("/tmp/run/merged", "user/repo-merged", commit_message="run 2026")
+
+    # Repo is created if missing (idempotent), then the folder bytes are uploaded.
+    fake_api.create_repo.assert_called_once_with(
+        "user/repo-merged", repo_type="model", private=True, exist_ok=True
+    )
+    fake_api.upload_folder.assert_called_once_with(
+        folder_path="/tmp/run/merged", repo_id="user/repo-merged",
+        repo_type="model", commit_message="run 2026", allow_patterns=None,
+    )
