@@ -53,9 +53,15 @@ class InMemoryVectorStore:
         if self._matrix is None or len(self._words) == 0:
             return []
         q = np.array(vector, dtype="float32")
-        sims = self._matrix @ q            # dot product == cosine (vectors are normalized)
+        sims = self._matrix @ q   # dot product == cosine similarity (vectors are L2-normalized)
         distances = 1.0 - sims
-        order = np.argsort(distances)[:k]  # ascending distance
+        # Sort by (distance ascending, word ascending) — the secondary word key breaks ties
+        # deterministically.  Without it, np.argsort uses insertion order for equal distances,
+        # which can differ from PgVectorStore's tie ordering and cause the candidate set returned
+        # here to diverge from what production pgvector returns.  A threshold tuned against this
+        # store must transfer faithfully to production, so both stores MUST agree on which k words
+        # are selected when several vocab words land at the same cosine distance.
+        order = sorted(range(len(self._words)), key=lambda i: (float(distances[i]), self._words[i]))[:k]
         return [(self._words[i], float(distances[i])) for i in order]
 
 
@@ -115,8 +121,13 @@ class PgVectorStore:
         lit = self._to_literal(vector)
         with self._connect() as conn, conn.cursor() as cur:
             cur.execute(
+                # The secondary `, word` sort key breaks ties by word lexicographically,
+                # matching the tie-break order of InMemoryVectorStore.nearest().  Without it,
+                # PostgreSQL may return a different arbitrary subset of equal-distance rows,
+                # causing threshold calibration done against the in-memory store to produce
+                # subtly different results in production pgvector — a reproducibility hazard.
                 f"SELECT word, vec <=> %s AS distance FROM {self._table} "
-                f"ORDER BY vec <=> %s LIMIT %s",
+                f"ORDER BY vec <=> %s, word LIMIT %s",
                 (lit, lit, k),
             )
             return [(word, float(dist)) for word, dist in cur.fetchall()]

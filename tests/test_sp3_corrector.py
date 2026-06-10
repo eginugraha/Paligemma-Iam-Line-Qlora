@@ -49,3 +49,67 @@ def test_threshold_zero_corrects_nothing():
     text, log = _corrector(threshold=0.0).correct("medisal")
     assert text == "medisal"
     assert log == []
+
+
+# ---------------------------------------------------------------------------
+# Rerank-guard: proves the Levenshtein step matters and cannot be skipped
+# ---------------------------------------------------------------------------
+
+# Vocabulary chosen to trigger a cosine-nearest ≠ Levenshtein-winner situation.
+# Empirically verified (probe script output):
+#
+#   store.nearest("handwrit", k=5) returns, in order:
+#     "handwritten"  cos_dist=0.2330  lev=0.2727   <- cosine-nearest
+#     "handwrite"    cos_dist=0.2372  lev=0.1111   <- Levenshtein winner
+#     "handwriting"  cos_dist=0.2984  lev=0.2727
+#     "handwrote"    cos_dist=0.4279  lev=0.2222
+#     "handwork"     cos_dist=0.5000  lev=0.3750
+#
+# "handwritten" has more trigram overlap with "handwrit" (shares "handwrit" as a
+# prefix giving trigrams ##h, #ha, han, and, nnd, ndw, dwr, wri, rit) but
+# "handwrite" differs from the query by only one character ("#e" appended), hence
+# its normalized Levenshtein (1/9 ≈ 0.111) beats "handwritten" (3/11 ≈ 0.273).
+# The correct/intended word is "handwrite"; "handwritten" would be wrong.
+#
+# If the Levenshtein rerank were dropped and we simply returned the cosine-nearest
+# word, the corrector would output "handwritten" instead of "handwrite" and this
+# test would FAIL — that is exactly what this test is designed to catch.
+_RERANK_VOCAB = ["handwritten", "handwrite", "handwriting", "handwrote", "handwork"]
+
+
+def _rerank_corrector(threshold=0.34):
+    """Build a corrector using the rerank-guard vocabulary."""
+    store = InMemoryVectorStore()
+    store.add_many([(w, vectorize.word_to_vector(w)) for w in _RERANK_VOCAB])
+    return RagCorrector(store=store, vocab=set(_RERANK_VOCAB), threshold=threshold)
+
+
+def test_levenshtein_rerank_overrides_cosine_nearest():
+    """Guard the cosine-screen → Levenshtein rerank step.
+
+    The cosine-nearest neighbour of "handwrit" is "handwritten" (highest trigram
+    overlap), but "handwrite" has a smaller normalized Levenshtein distance (0.111
+    vs 0.273).  The corrector must return "handwrite" — the edit-distance winner —
+    not the cosine-nearest "handwritten".  A regression that skips the rerank and
+    returns the cosine-nearest directly would output the wrong word and fail here.
+    """
+    from htr_sp3 import config
+
+    # Sanity check: verify the empirical premise still holds (cosine-nearest is
+    # "handwritten", not "handwrite") so this test stays meaningful if internals change.
+    store = InMemoryVectorStore()
+    store.add_many([(w, vectorize.word_to_vector(w)) for w in _RERANK_VOCAB])
+    hits = store.nearest(vectorize.word_to_vector("handwrit"), k=config.K_NEIGHBORS)
+    assert hits[0][0] == "handwritten", (
+        "Empirical premise broken: cosine-nearest is no longer 'handwritten'. "
+        "Recalibrate the rerank-guard test."
+    )
+
+    # The actual behavioural assertion: corrector must pick the Levenshtein winner.
+    text, log = _rerank_corrector().correct("handwrit")
+    assert text == "handwrite", (
+        f"Expected Levenshtein winner 'handwrite' but got {text!r}. "
+        "This likely means the rerank step was removed or bypassed."
+    )
+    assert log[0]["from"] == "handwrit"
+    assert log[0]["to"] == "handwrite"
