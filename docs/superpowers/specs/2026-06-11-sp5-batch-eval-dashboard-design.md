@@ -82,7 +82,7 @@ CREATE TABLE eval_result (
   id               BIGSERIAL PRIMARY KEY,
   run_id           BIGINT NOT NULL REFERENCES eval_run(id) ON DELETE CASCADE,
   sample_id        TEXT NOT NULL,        -- IAM image id
-  scenario         TEXT NOT NULL,        -- 'm1_qlora' | 'm2_cot' | 'm3_rag' | 'm4_hybrid'
+  scenario         TEXT NOT NULL,        -- 'm1' | 'm2' | 'm3' | 'm4' (matches the orchestrator's `model` field)
   text             TEXT,
   ground_truth     TEXT,
   cer              REAL,                 -- NULL if no ground truth
@@ -100,7 +100,7 @@ CREATE TABLE upload_result (
   filename      TEXT NOT NULL,
   object_key    TEXT NOT NULL,           -- MinIO object key (bucket from env)
   ground_truth  TEXT,                    -- nullable
-  results       JSONB NOT NULL           -- {m1_qlora:{text,cer,wer,latency_seconds,log,status_tag}, m2_cot:..., m3_rag:..., m4_hybrid:...}
+  results       JSONB NOT NULL           -- {m1:{text,cer,wer,latency_seconds,log,status_tag}, m2:..., m3:..., m4:...} (scenario keys = orchestrator `model` field)
 );
 ```
 
