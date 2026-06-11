@@ -29,7 +29,8 @@ key.
 | Image storage | **MinIO** object storage (`minio-py` client); DB stores the **object key** only |
 | Batch eval trigger | **Offline CLI** `scripts/eval_sp5.py` (needs GPU + many images; not browser-triggered) |
 | Upload persistence | **Automatic** in `POST /v1/detect`, **after** the stream completes |
-| Frontend layout | **2 separate routes** — `/dashboard` (batch matrix) and `/history` (upload list) + navbar |
+| Frontend layout | **2 separate routes** — `/dashboard` (batch matrix + chart) and `/history` (upload list) + navbar |
+| Dashboard chart | **Chart.js** bar chart (CER & WER per scenario) via a thin `BarChart.svelte` wrapper, alongside the matrix table |
 | `eval_result` shape | **Long format** (1 row per image×scenario) → easy `GROUP BY scenario` aggregation |
 | `upload_result` shape | Results stored as **JSONB** (display-only, not aggregated) |
 | Image reference column | `object_key` (MinIO key string, e.g. `uploads/2026/06/11/<uuid>.png`) |
@@ -51,8 +52,10 @@ scripts/
   eval_sp5.py      # offline CLI: run M1-M4 over N IAM-test samples -> eval_run + eval_result
 frontend/src/routes/
   +layout.svelte           # navbar: Detect | Dashboard | History
-  dashboard/+page.svelte   # FR-FE-05 batch-eval summary matrix
+  dashboard/+page.svelte   # FR-FE-05 batch-eval summary matrix + comparison chart
   history/+page.svelte     # upload history list + thumbnail + expandable detail
+frontend/src/lib/
+  BarChart.svelte          # thin Chart.js wrapper (grouped CER/WER bar chart)
 ```
 
 Small additions to **SP-2** (`src/htr_sp2/api.py`):
@@ -158,6 +161,11 @@ no UI library (consistent with SP-4). Backend base URL via existing `VITE_API_BA
 - Run selector (dropdown) populated from `GET /v1/eval/runs`; defaults to the latest run.
 - Table: rows = M1 QLoRA / M2 +CoT / M3 +RAG / M4 Hybrid; columns = Avg CER, Avg WER,
   Avg Latency, N. Numbers are copy-able for the thesis appendix.
+- **Comparison chart (Chart.js):** a grouped **bar chart** of Avg CER and Avg WER per scenario
+  (M1–M4), driven by the same summary JSON as the table. Wrapped in a thin `BarChart.svelte`
+  component (mounts a Chart.js instance on a `<canvas>`, destroys it on unmount, updates on data
+  change). This is the one intentional exception to SP-4's "no UI library" rule — added for the
+  thesis Bab 4 comparison visual. No other chart types.
 
 **`/history` — upload history:**
 - Paginated list (newest first) from `GET /v1/uploads`.
@@ -194,6 +202,8 @@ Document these in `.env.example`. If MinIO env is unset, the upload-persistence 
 
 **Frontend (Vitest):**
 - Dashboard table renders from a fixture summary JSON; run selector switches data.
+- `BarChart.svelte` mounts/updates/destroys cleanly from fixture data (Chart.js mocked so the
+  test asserts the wrapper's lifecycle + passed datasets, not pixel output).
 - History list renders + row expand; navbar renders/links.
 - New API client functions.
 - No Playwright (consistent with SP-4).
@@ -207,5 +217,5 @@ Document these in `.env.example`. If MinIO env is unset, the upload-persistence 
 - Triggering batch eval from the browser (CLI only).
 - Auth / multi-user separation of histories.
 - Editing or deleting history rows from the UI.
-- Charts/graphs on the dashboard (a plain matrix table satisfies FR-FE-05).
+- Chart types beyond the single grouped CER/WER bar chart (no line/pie/interactive dashboards).
 - Storing batch-eval dataset images in MinIO (they are reproducible from the IAM dataset).
