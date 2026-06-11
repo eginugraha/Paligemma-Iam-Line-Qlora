@@ -6,6 +6,10 @@ python-multipart==0.0.9
 httpx==0.27.0
 pillow==10.4.0
 jiwer==3.0.4
+# SP-5 object storage: minio-py is the official MinIO Python client (S3-compatible).
+# Pinned to 7.2.x which is the latest stable series as of mid-2026 and supports
+# presigned URLs via timedelta (required by objectstore.py).
+minio==7.2.7
 # Dev / test only:
 pytest==8.2.2
 pytest-httpx==0.30.0
