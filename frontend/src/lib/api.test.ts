@@ -39,19 +39,22 @@ describe('detectStream', () => {
 
     expect(events.map((e) => e.event)).toEqual(['meta', 'result', 'done']);
     // POSTed to the right URL with multipart FormData carrying the file + ground_truth.
-    const [url, init] = fetchMock.mock.calls[0];
+    // Cast calls via unknown so TS accepts the (url, init) tuple shape from the zero-arg mock.
+    const calls = fetchMock.mock.calls as unknown as Parameters<typeof fetch>[];
+    const [url, init] = calls[0]!;
     expect(url).toBe('http://test/v1/detect');
-    expect(init.method).toBe('POST');
-    expect(init.body).toBeInstanceOf(FormData);
-    expect((init.body as FormData).get('file')).toBeInstanceOf(File);
-    expect((init.body as FormData).get('ground_truth')).toBe('hi');
+    expect(init!.method).toBe('POST');
+    expect(init!.body).toBeInstanceOf(FormData);
+    expect((init!.body as FormData).get('file')).toBeInstanceOf(File);
+    expect((init!.body as FormData).get('ground_truth')).toBe('hi');
   });
 
   it('omits ground_truth when not provided', async () => {
     const fetchMock = vi.fn(async () => ({ ok: true, status: 200, body: bodyFrom(['{"event":"done"}\n']) }));
     vi.stubGlobal('fetch', fetchMock);
     await collect(PNG);
-    expect((fetchMock.mock.calls[0][1].body as FormData).get('ground_truth')).toBeNull();
+    const calls2 = fetchMock.mock.calls as unknown as Parameters<typeof fetch>[];
+    expect((calls2[0]![1]!.body as FormData).get('ground_truth')).toBeNull();
   });
 
   it('throws on a non-OK response (e.g. 422)', async () => {
