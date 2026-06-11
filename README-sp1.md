@@ -45,7 +45,7 @@ python scripts/eval_sp1.py --base-precision bf16 --out test_metrics_bf16.json # 
 huggingface-cli upload eginugraha/htr-sp1-run-artifacts /workspace/outputs/test_metrics.json test_metrics.json --repo-type dataset
 huggingface-cli upload eginugraha/htr-sp1-run-artifacts /workspace/htr/train.log train.log --repo-type dataset
 ```
-ps aux | grep python scripts/train_sp1.py
+
 - **Precision:** `--precision auto` (default) picks **bf16** on Ampere/Ada GPUs (A6000/3090/4090), **fp16** on a T4 — no code edit needed when moving machines.
 - **Config precedence:** CLI flag > env var (`HTR_*`) > `config.py` default. Override per run with `--epochs`, `--batch-size`, `--output-dir`, `--hub-repo`.
 - **Skip flags:** `--skip-sanity`, `--no-eval`, `--no-push` (the last writes artifacts to disk but

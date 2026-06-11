@@ -7,3 +7,6 @@ __pycache__/
 checkpoints/
 *.gguf
 *.safetensors
+
+# Superpowers visual brainstorm scratch dir
+.superpowers/
