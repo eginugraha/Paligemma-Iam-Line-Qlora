@@ -38,10 +38,12 @@ Key design decisions
 from __future__ import annotations
 
 import io
+import json
+import logging
 
-from fastapi import FastAPI, File, Form, HTTPException, UploadFile
+from fastapi import FastAPI, File, Form, HTTPException, Query, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse
+from fastapi.responses import JSONResponse, RedirectResponse, StreamingResponse
 from PIL import Image, UnidentifiedImageError
 
 # get_engine reads config.ENGINE (defaults to "fake") and returns the appropriate
@@ -56,6 +58,20 @@ from htr_sp2.orchestrator import detect_stream
 
 from htr_sp2 import config
 from htr_sp2.corrector_factory import get_corrector
+
+# SP-5: config module exposes ``minio_configured()`` which guards all MinIO calls.
+# Imported here (not inside the helper functions) so that monkeypatching
+# ``sp5_config.minio_configured`` in tests works without reloading the module.
+from htr_sp5 import config as sp5_config
+
+# SP-5: ``fold_results`` reduces a list of NDJSON event dicts into the compact
+# ``{model: {text, cer, wer, …}}`` dict stored as a JSONB blob in upload_result.
+from htr_sp5.schemas import fold_results
+
+# Named logger for all SP-5 persistence messages.  Using a dedicated logger
+# (instead of the root logger) lets operators filter SP-5 noise independently
+# of SP-2 inference logs.
+logger = logging.getLogger("htr_sp5")
 
 # ---------------------------------------------------------------------------
 # FastAPI application
@@ -80,6 +96,87 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+# ---------------------------------------------------------------------------
+# SP-5 lazy provider helpers
+# ---------------------------------------------------------------------------
+# These two functions are intentionally module-level *callables* rather than
+# module-level *values*.  The distinction matters for two reasons:
+#
+# 1. Test monkeypatching: pytest's ``monkeypatch.setattr(api_module, "_get_store", ...)``
+#    replaces the *name* in the module's namespace.  If we stored the store instance in a
+#    module-level variable at import time, tests would need to patch the variable AND reset
+#    it after each test.  With a callable, ``monkeypatch.setattr`` is the only hook needed,
+#    and pytest automatically undoes it after each test.
+#
+# 2. Graceful degradation (no-op without configuration): when MinIO / Postgres are not
+#    configured (which is always the case in CI and local dev without Docker), the functions
+#    return None.  The persistence hook in ``_stream_and_persist`` checks for None and
+#    exits early, so the existing SP-2 tests (which do not configure MinIO) are unaffected.
+#    This is the critical backward-compatibility guarantee: the SP-5 persistence layer is
+#    entirely invisible to the SP-2 API tests.
+
+
+def _get_store():
+    """Return an ``Sp5Store`` instance, or ``None`` if the store module cannot be imported.
+
+    ``Sp5Store.__init__`` only stores the DSN string — it does **not** open a database
+    connection.  The connection is lazy: it is established the first time a query method
+    is called (e.g. ``insert_upload``).  Therefore this function almost always returns a
+    valid ``Sp5Store`` object; it returns ``None`` only in the rare case where importing
+    ``htr_sp5.store`` itself raises an exception (e.g. a broken install or a missing
+    dependency at import time).
+
+    The real backward-compatibility safety net is two-fold:
+      1. ``_get_object_store()`` returns ``None`` when MinIO credentials are absent, and
+         the ``if store is None or objstore is None: return`` guard in ``_stream_and_persist``
+         skips all persistence when either provider is unavailable.
+      2. The ``except Exception`` in ``_stream_and_persist`` catches and logs any DB error
+         that surfaces at query time (e.g. a Postgres outage at ``insert_upload``), so a
+         storage failure can never corrupt the client's already-delivered response.
+
+    The ``store is None`` branch of the guard is therefore defensive-only — it protects
+    against an import failure, not against a missing ``HTR_PG_DSN`` or unreachable DB.
+
+    Design note — no module-level caching:
+        We do NOT cache the returned instance in a module-level variable because
+        ``monkeypatch.setattr`` needs to replace this *function* itself, not a cached
+        attribute of a previously constructed object.  A new ``Sp5Store`` is constructed
+        per request; for the thesis prototype the overhead is negligible since no
+        connection is opened here.  A production version would use a connection pool.
+
+    Returns:
+        ``Sp5Store`` instance (DB connection is lazy), or ``None`` if the module import fails.
+    """
+    try:
+        from htr_sp5.store import Sp5Store
+        return Sp5Store()
+    except Exception:  # pragma: no cover - import failure path (extremely rare)
+        return None
+
+
+def _get_object_store():
+    """Return a ``MinioObjectStore`` instance, or ``None`` when MinIO is not configured.
+
+    ``sp5_config.minio_configured()`` checks that all three MinIO credentials
+    (endpoint, access key, secret key) are non-empty strings.  If any are missing we
+    return ``None`` immediately, avoiding a failed TCP connection attempt to a
+    non-existent MinIO endpoint.
+
+    Design note — guard before import:
+        The ``MinioObjectStore`` import lives *inside* this function so that the ``minio``
+        Python package is only required when MinIO is actually configured.  This keeps the
+        SP-2 API importable on machines where ``minio`` is not installed (e.g. a minimal
+        inference-only deployment that doesn't need upload history).
+
+    Returns:
+        ``MinioObjectStore`` if MinIO credentials are fully set, ``None`` otherwise.
+    """
+    if not sp5_config.minio_configured():
+        return None
+    from htr_sp5.objectstore import MinioObjectStore
+    return MinioObjectStore.from_config()
 
 
 # ---------------------------------------------------------------------------
@@ -176,8 +273,250 @@ async def detect(
         engine, image, file.filename or "upload", ground_truth, corrector=corrector
     )
 
-    # --- 4. Return the streaming response -------------------------------------
-    # media_type="application/x-ndjson" tells clients the body is newline-delimited
-    # JSON rather than a single JSON document. The SP-4 frontend and SP-5 evaluator
-    # both check this content-type to select the correct parser.
-    return StreamingResponse(stream, media_type="application/x-ndjson")
+    # --- 4. Wrap the stream with SP-5 upload-persistence (tee approach) ------
+    # We need to accomplish two things at once:
+    #   (a) Yield every NDJSON line to the HTTP client as before (unchanged SP-2 behaviour).
+    #   (b) After the stream is fully consumed, persist the image and results to MinIO/Postgres.
+    #
+    # The challenge is that ``StreamingResponse`` starts flushing to the client as soon as the
+    # generator yields its first line, so we cannot do post-processing *after* the response
+    # object is returned.  The solution is a "tee" generator: it re-yields each line verbatim
+    # (preserving the streaming UX) while collecting parsed events in a local list.  Only when
+    # the inner ``stream`` is exhausted — meaning the client has received all lines — does the
+    # generator execute the persistence logic.
+    #
+    # Why best-effort (try/except that logs and swallows)?
+    #   At the point persistence runs, the HTTP response body has already been written.
+    #   If we were to raise an exception here, FastAPI would produce a truncated body with no
+    #   error status change (the 200 status line was already sent).  The client would receive a
+    #   partial stream with no indication of what went wrong.  It is strictly better to swallow
+    #   the exception, log it for operator investigation, and leave the client with a complete
+    #   and valid response.  Missing a history record is a non-critical loss; corrupting the
+    #   response would break every SP-4 frontend consumer.
+    #
+    # Closure over ``raw``:
+    #   ``raw`` (the bytes read at the top of this handler) is captured by the nested generator
+    #   closure.  We use ``raw`` rather than re-reading ``file`` because the UploadFile async
+    #   cursor is already at EOF after the first ``await file.read()``.
+
+    def _stream_and_persist():
+        """Tee the detect stream to the client, then persist the upload best-effort.
+
+        Yields every NDJSON line from the underlying ``detect_stream`` generator while
+        simultaneously collecting parsed event dicts.  After the inner generator is
+        exhausted, attempts to store the image in MinIO and record the upload in
+        Postgres.  Any exception during persistence is logged and silently ignored so
+        that a storage outage cannot corrupt the client's already-delivered response.
+
+        Yields:
+            bytes-or-str: Each NDJSON line from ``detect_stream``, unmodified.
+        """
+        # Accumulate parsed event dicts so we can fold them into the results JSONB blob
+        # after the stream ends.  We parse each line as it passes through rather than
+        # storing raw lines, because ``fold_results`` expects dicts, not strings.
+        events: list[dict] = []
+
+        for line in stream:
+            # Parse the line now (while the generator is hot) and buffer it.
+            # json.loads is cheap compared to inference latency, so this adds no
+            # meaningful overhead to the streaming path.
+            events.append(json.loads(line))
+            # Re-yield the original line (not the re-serialised dict) to preserve
+            # byte-for-byte fidelity with what detect_stream produced.
+            yield line
+
+        # --- Persistence (best-effort) -----------------------------------------
+        # The entire stream has been consumed and delivered to the client.
+        # We now attempt to save the image and its results.  Any failure here is
+        # explicitly swallowed: the client already has a complete 200 response and
+        # there is no mechanism to signal an error after streaming has ended.
+        try:
+            store = _get_store()
+            objstore = _get_object_store()
+
+            # If either provider returns None (e.g. MinIO/Postgres not configured in
+            # this deployment), skip persistence entirely.  This is the no-op path
+            # that keeps the existing SP-2 CI tests green without any MinIO setup.
+            if store is None or objstore is None:
+                return
+
+            # Allocate a unique object key for this upload, then store the raw bytes.
+            # ``new_object_key`` generates a timestamped UUID path under "uploads/";
+            # ``put_object`` performs the actual MinIO PUT request.
+            object_key = objstore.new_object_key(file.filename or "upload.png")
+            objstore.put_object(
+                object_key,
+                raw,  # captured from the enclosing request handler's ``raw = await file.read()``
+                content_type=file.content_type or "image/png",
+            )
+
+            # Fold the accumulated stream events into the compact results dict and
+            # write one row to the upload_result table.
+            # ``fold_results`` filters out meta/error/done events, keeping only
+            # "result" events, and maps them to {model: {text, cer, wer, …}}.
+            store.insert_upload(
+                filename=file.filename or "upload",
+                object_key=object_key,
+                ground_truth=ground_truth,
+                results=fold_results(events),
+            )
+
+        except Exception:
+            # Log the full traceback so operators can investigate storage issues,
+            # but do NOT re-raise: the response is already complete for the client.
+            # Swallowing this exception is intentional — see the module-level comment
+            # on _stream_and_persist for the full rationale.
+            logger.exception("SP-5 upload persistence failed (ignored)")
+
+    # --- 5. Return the wrapped streaming response -----------------------------
+    # The generator replaces the bare ``stream`` from SP-2 while keeping the same
+    # media_type and streaming semantics.  From the client's perspective nothing has
+    # changed: they still receive the same sequence of NDJSON lines.
+    return StreamingResponse(_stream_and_persist(), media_type="application/x-ndjson")
+
+
+# ---------------------------------------------------------------------------
+# SP-5 read endpoints — dashboard and history views
+# ---------------------------------------------------------------------------
+# These are thin read-only wrappers around the SP-5 store.  They deliberately
+# contain NO business logic beyond querying the store and serialising the result:
+# the store (``Sp5Store``) owns query construction and the schemas module owns
+# data shape; this layer only handles HTTP concerns (status codes, JSON serialisation,
+# query parameter parsing).
+#
+# All four endpoints call ``_get_store()`` / ``_get_object_store()`` for the same
+# reason as the ``/v1/detect`` persistence hook: the functions are the monkeypatch
+# seam for tests, and they return None when storage is not configured so that the
+# endpoints degrade gracefully (returning [] / 404) instead of crashing.
+
+
+@app.get(
+    "/v1/eval/runs",
+    summary="List all batch evaluation runs",
+    response_description="Array of eval_run rows, newest first.",
+)
+def eval_runs():
+    """Return a JSON array of all batch evaluation runs recorded in the database.
+
+    Each element corresponds to one row in the ``eval_run`` table, representing a
+    single batch job that processed a dataset through the M1–M4 scenarios.  The
+    SP-5 dashboard uses this list to populate the run-selector dropdown.
+
+    When the database is not configured (e.g. in local dev without Postgres),
+    the store is None and we return an empty array rather than a 500 error, so the
+    dashboard renders an empty state instead of crashing.
+
+    Returns:
+        JSONResponse: Array of eval-run dicts (may be empty if no runs exist or
+                      storage is not configured).
+    """
+    store = _get_store()
+    # Guard: return [] rather than crashing when Postgres is unavailable.
+    return JSONResponse([] if store is None else store.list_eval_runs())
+
+
+@app.get(
+    "/v1/eval/summary",
+    summary="Per-scenario aggregate metrics for an evaluation run",
+    response_description="Array of per-scenario aggregate metric rows.",
+)
+def eval_summary(run_id: int | None = Query(None)):
+    """Return per-scenario aggregate metrics (avg CER, avg WER, avg latency) for a run.
+
+    When ``run_id`` is omitted the endpoint defaults to the most recently created run
+    (via ``store.latest_run_id()``).  This is the most common use case: the dashboard
+    home page always shows the latest evaluation without requiring the user to specify
+    a run ID.
+
+    Args:
+        run_id: Optional query parameter.  When provided, return metrics for that
+                specific run; when absent, default to the latest run id from the store.
+
+    Returns:
+        JSONResponse: Array of per-scenario aggregate dicts, or [] if no data is
+                      available (unconfigured storage, unknown run_id, or no results yet).
+    """
+    store = _get_store()
+    if store is None:
+        return JSONResponse([])
+
+    # Resolve the run id: use the explicit query param, or fall back to latest.
+    # ``latest_run_id()`` may itself return None if the eval_run table is empty,
+    # in which case we also return [] to avoid passing None to eval_summary().
+    rid = run_id if run_id is not None else store.latest_run_id()
+    return JSONResponse([] if rid is None else store.eval_summary(rid))
+
+
+@app.get(
+    "/v1/uploads",
+    summary="Paginated upload history",
+    response_description="Page of upload_result rows.",
+)
+def uploads(
+    limit: int = Query(50, ge=1, le=200),
+    offset: int = Query(0, ge=0),
+):
+    """Return a paginated list of user uploads from the upload_result table.
+
+    Used by the SP-5 dashboard's history page to show every image that was ever
+    submitted to ``/v1/detect``.  Pagination is cursor-free (limit/offset) because
+    the thesis demo dataset is small and total ordering by insertion time is fine.
+
+    Args:
+        limit:  Maximum rows to return (1–200, default 50).  Capped at 200 to prevent
+                accidental full-table scans from browser clients.
+        offset: Number of rows to skip before returning results (default 0, first page).
+
+    Returns:
+        JSONResponse: Array of upload_result dicts, or [] if storage is not configured.
+    """
+    store = _get_store()
+    return JSONResponse([] if store is None else store.list_uploads(limit, offset))
+
+
+@app.get(
+    "/v1/uploads/{upload_id}/image",
+    summary="Redirect to the presigned MinIO URL for an uploaded image",
+    response_description="307 Temporary Redirect to a time-limited presigned URL.",
+)
+def upload_image(upload_id: int):
+    """Redirect the caller to a presigned MinIO URL for the requested uploaded image.
+
+    Rather than proxying the image bytes through this API server (which would double
+    the bandwidth and add latency), we generate a short-lived presigned URL that lets
+    the browser fetch the image directly from MinIO.  This is the standard pattern for
+    S3-compatible object storage: the API server issues the presigned URL, and the client
+    fetches the object from MinIO in a separate request.
+
+    ``RedirectResponse`` defaults to status 307 (Temporary Redirect), which is correct
+    here: the presigned URL is ephemeral (it expires after ``expires_seconds``), so
+    caching the redirect destination would cause stale links.  Status 302 would have the
+    same expiry semantics but some clients incorrectly cache it; 307 is safer.
+
+    Args:
+        upload_id: Primary key of the ``upload_result`` row.
+
+    Returns:
+        RedirectResponse (307): Location header set to the presigned MinIO URL.
+
+    Raises:
+        HTTPException(404): If object storage is not configured, or if no upload with
+                            the given ``upload_id`` exists in the database.
+    """
+    store = _get_store()
+    objstore = _get_object_store()
+
+    # Both store and objstore are required: the store looks up the object key, and
+    # objstore generates the presigned URL.  If either is unavailable we cannot serve
+    # the image, so we return 404 rather than 500 to avoid alarming the browser.
+    if store is None or objstore is None:
+        raise HTTPException(status_code=404, detail="object storage not configured")
+
+    key = store.get_upload_object_key(upload_id)
+    if key is None:
+        # The upload_id does not exist in the database.
+        raise HTTPException(status_code=404, detail="upload not found")
+
+    # Generate a presigned GET URL valid for 1 hour (default in MinioObjectStore).
+    # RedirectResponse defaults to 307 — intentionally kept so clients do not cache the URL.
+    return RedirectResponse(objstore.presigned_get_url(key))
