@@ -4,17 +4,18 @@ Loads the SP-1 fine-tuned model once on cold start, then for each request decode
 image, runs the supplied prompt through htr_sp1.inference.generate_transcription, and
 returns {"text": ...}. The local backend talks to this via RunPodEngine.
 
-Why this file lives at the repository ROOT and is named ``rp_handler.py``:
+Why this file lives at the repository ROOT and is named ``handler.py`` with a MODULE-LEVEL
+``runpod.serverless.start(...)`` (no ``if __name__ == "__main__"`` guard):
     RunPod's "deploy from GitHub" pipeline scans the repo ROOT for a Python file containing a
-    ``runpod.serverless.start(...)`` call to validate the worker (the source of the
-    "Could not find runpod.serverless.start() in your repo" error when the handler is buried
-    in a subdirectory). The official runpod-workers/worker-basic example uses exactly this
-    name and location, so we mirror it. NOTE: the handler must NOT live in a directory named
-    ``runpod/`` — that directory would shadow the installed ``runpod`` SDK as a namespace
-    package and break ``import runpod``.
+    module-body ``runpod.serverless.start(...)`` call to validate the worker (the source of
+    the "Could not find runpod.serverless.start() in your repo" error). Burying the handler in
+    a subdirectory, OR wrapping the call in a ``__main__`` guard, both hide it from that
+    scanner. NOTE: the handler must NOT live in a directory named ``runpod/`` — that directory
+    would shadow the installed ``runpod`` SDK as a namespace package and break ``import
+    runpod``.
 
 Deploy: the repo-root Dockerfile builds an image from requirements-runpod.txt with this file
-as the entrypoint (``python -u rp_handler.py``). The generation path requires a GPU, so it is
+as the entrypoint (``python -u handler.py``). The generation path requires a GPU, so it is
 validated on RunPod (manual/integration), not in the CPU unit suite. The request/response
 wire format is unit-tested via htr_sp2.runpod_io.
 """

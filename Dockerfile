@@ -26,10 +26,10 @@ WORKDIR /app
 COPY requirements-runpod.txt .
 RUN pip install --no-cache-dir -r requirements-runpod.txt
 
-# Application code. rp_handler.py (repo root) imports the htr_sp1 (model + inference) and
+# Application code. handler.py (repo root) imports the htr_sp1 (model + inference) and
 # htr_sp2 (runpod_io wire format) packages, which live under src/.
 COPY src/ ./src/
-COPY rp_handler.py ./rp_handler.py
+COPY handler.py ./handler.py
 
 # src/ holds the importable packages (htr_sp1, htr_sp2). Putting it on PYTHONPATH lets
 # `from htr_sp1 ...` / `from htr_sp2 ...` resolve without a `pip install -e .` step — the
@@ -43,6 +43,6 @@ ENV PYTHONPATH=/app/src
 # the container's ephemeral layer and re-downloads on each cold start.
 ENV HF_HOME=/runpod-volume/huggingface
 
-# rp_handler.py's __main__ block calls runpod.serverless.start({"handler": handler}); this is
+# handler.py calls runpod.serverless.start({"handler": handler}) at module level; this is
 # the entrypoint RunPod invokes for every job. -u keeps logs unbuffered.
-CMD ["python", "-u", "rp_handler.py"]
+CMD ["python", "-u", "handler.py"]
