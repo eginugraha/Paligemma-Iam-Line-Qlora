@@ -42,6 +42,7 @@ import json
 import logging
 
 from fastapi import FastAPI, File, Form, HTTPException, Query, UploadFile
+from fastapi.encoders import jsonable_encoder
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, RedirectResponse, StreamingResponse
 from PIL import Image, UnidentifiedImageError
@@ -412,7 +413,9 @@ def eval_runs():
     """
     store = _get_store()
     # Guard: return [] rather than crashing when Postgres is unavailable.
-    return JSONResponse([] if store is None else store.list_eval_runs())
+    # jsonable_encoder converts non-JSON-native types (e.g. the rows' ``created_at``
+    # datetime) into ISO-8601 strings before JSONResponse's plain json.dumps runs.
+    return JSONResponse(jsonable_encoder([] if store is None else store.list_eval_runs()))
 
 
 @app.get(
@@ -444,7 +447,8 @@ def eval_summary(run_id: int | None = Query(None)):
     # ``latest_run_id()`` may itself return None if the eval_run table is empty,
     # in which case we also return [] to avoid passing None to eval_summary().
     rid = run_id if run_id is not None else store.latest_run_id()
-    return JSONResponse([] if rid is None else store.eval_summary(rid))
+    # jsonable_encoder guards against any non-JSON-native types in the aggregate rows.
+    return JSONResponse(jsonable_encoder([] if rid is None else store.eval_summary(rid)))
 
 
 @app.get(
@@ -471,7 +475,9 @@ def uploads(
         JSONResponse: Array of upload_result dicts, or [] if storage is not configured.
     """
     store = _get_store()
-    return JSONResponse([] if store is None else store.list_uploads(limit, offset))
+    # jsonable_encoder converts each row's ``created_at`` datetime into an ISO-8601
+    # string so JSONResponse's plain json.dumps can serialise the upload history.
+    return JSONResponse(jsonable_encoder([] if store is None else store.list_uploads(limit, offset)))
 
 
 @app.get(
