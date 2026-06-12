@@ -6,3 +6,7 @@ transformers==4.42.4
 peft==0.11.1
 accelerate==0.31.0
 pillow==10.4.0
+# 4-bit (QLoRA) base loading: handler defaults to HTR_BASE_PRECISION=4bit, which calls
+# BitsAndBytesConfig(load_in_4bit=...) — that path requires bitsandbytes + a CUDA GPU.
+# Pinned to the same version as requirements.txt so the worker reproduces the SP-1 numbers.
+bitsandbytes==0.43.1
