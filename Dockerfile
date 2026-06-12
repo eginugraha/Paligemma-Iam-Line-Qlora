@@ -36,12 +36,13 @@ COPY handler.py ./handler.py
 # same convention the local backend and scripts use via `--app-dir src`.
 ENV PYTHONPATH=/app/src
 
-# Cache HuggingFace downloads on the RunPod network volume (mounted at /runpod-volume) so the
-# ~6 GB gated base model (google/paligemma-3b-pt-448) and the LoRA adapter are downloaded
-# once and reused across cold starts instead of every time the worker scales from zero.
-# ATTACH A NETWORK VOLUME to the endpoint for this to persist; without one it falls back to
-# the container's ephemeral layer and re-downloads on each cold start.
-ENV HF_HOME=/runpod-volume/huggingface
+# Point HuggingFace at RunPod's cache path. RunPod's "Cached Models" feature pre-downloads the
+# model you list on the endpoint to /runpod-volume/huggingface-cache/hub/ (HF cache layout), so
+# HF_HOME must be its PARENT (/runpod-volume/huggingface-cache) for the handler to find the
+# cached weights instead of re-downloading. With the base (google/paligemma-3b-pt-448) cached,
+# cold start drops from ~90 s+ (6 GB download) to ~15 s (local NVMe load). Requires a network
+# volume attached to the endpoint; without one it falls back to the ephemeral layer.
+ENV HF_HOME=/runpod-volume/huggingface-cache
 
 # handler.py calls runpod.serverless.start({"handler": handler}) at module level; this is
 # the entrypoint RunPod invokes for every job. -u keeps logs unbuffered.
