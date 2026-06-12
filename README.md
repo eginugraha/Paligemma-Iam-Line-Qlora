@@ -197,6 +197,12 @@ Real M1–M4 inference runs on a RunPod GPU worker built from the repo-root `Doc
 
 ---
 
+## Contributors
+
+- Putu Bagus Indra Dermawan Kemuning
+- Lawy Xenna L. Gaol
+- Egi Nugraha
+
 ## Citation
 
 If you use this work, please cite the thesis (details TBD) and the underlying components:
