@@ -63,5 +63,10 @@ def handler(event: dict) -> dict:
     return {"text": text}
 
 
-if __name__ == "__main__":
-    runpod.serverless.start({"handler": handler})
+# RunPod entrypoint — called at MODULE level (not inside an `if __name__ == "__main__"`
+# guard) on purpose. RunPod's GitHub handler-discovery scans the repo for a top-level
+# `runpod.serverless.start(...)` call, and its managed worker runtime expects start() to run
+# when the handler module is imported. The Dockerfile's `python runpod/handler.py` reaches
+# this same line, so the container entrypoint is unchanged. This module is never imported by
+# the CPU test suite (it needs torch/runpod on a GPU), so running start() on import is safe.
+runpod.serverless.start({"handler": handler})
