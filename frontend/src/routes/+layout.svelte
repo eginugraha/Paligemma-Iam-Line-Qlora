@@ -48,12 +48,21 @@
 </main>
 
 <style>
+  /* App-wide typeface. This lives in the layout (which wraps every route) so Poppins
+     applies on every page, not just the home route. Components inherit this unless they
+     deliberately override it (e.g. the monospace transcription/log areas). */
+  :global(body) {
+    font-family: 'Poppins', system-ui, sans-serif;
+  }
+
   nav {
     display: flex;
     gap: 1rem;
     padding: 0.75rem 1rem;
     border-bottom: 1px solid #ddd;
     background: #fff;
+    /* Inherit the global Poppins set on body. */
+    font-family: inherit;
   }
 
   nav a {

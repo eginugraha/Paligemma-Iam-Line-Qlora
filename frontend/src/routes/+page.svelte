@@ -101,7 +101,7 @@
 </main>
 
 <style>
-  :global(body) { margin: 0; font-family: system-ui, sans-serif; background: #eef2f8; color: #1f2937; }
+  :global(body) { margin: 0; font-family: 'Poppins', system-ui, sans-serif; background: #eef2f8; color: #1f2937; }
   main { max-width: 1200px; margin: 0 auto; padding: 24px; }
   h1 { margin: 0 0 4px; font-size: 22px; }
   .sub { margin: 0 0 18px; color: #64748b; }

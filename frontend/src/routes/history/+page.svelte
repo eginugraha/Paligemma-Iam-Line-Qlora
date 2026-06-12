@@ -213,7 +213,7 @@
     max-width: 900px;
     margin: 0 auto;
     padding: 24px;
-    font-family: system-ui, sans-serif;
+    font-family: 'Poppins', system-ui, sans-serif;
     color: #1f2937;
   }
 
