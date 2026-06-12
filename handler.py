@@ -25,8 +25,11 @@ import os
 
 import runpod
 
-from htr_sp1.inference import generate_transcription
-from htr_sp2 import runpod_io
+# NOTE: the heavy app imports (htr_sp1 / htr_sp2, which pull in torch, transformers, PIL …)
+# are deliberately NOT imported at module level — they live inside the functions below. This
+# keeps the module importable with only the `runpod` SDK present, so RunPod's
+# deploy-from-GitHub validation can reach the module-level runpod.serverless.start() call
+# even if it imports this file in an environment without the model stack installed.
 
 # Loaded lazily on first request and cached for the worker's lifetime (avoids reloading
 # the 3B model on every call).
@@ -62,6 +65,10 @@ def _load_model():
 
 def handler(event: dict) -> dict:
     """RunPod entrypoint: {"input": {image_b64, prompt, max_new_tokens}} -> {"text": ...}."""
+    # Imported here (not at module top) so importing this module needs only the runpod SDK.
+    from htr_sp1.inference import generate_transcription
+    from htr_sp2 import runpod_io
+
     args = runpod_io.parse_input(event)
     model, processor = _load_model()
     text = generate_transcription(
