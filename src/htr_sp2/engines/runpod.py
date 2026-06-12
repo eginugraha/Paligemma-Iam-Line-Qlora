@@ -1,7 +1,7 @@
 """RunPod Serverless client engine.
 
-The model runs on a RunPod GPU worker (see runpod/handler.py). This class is a thin HTTP
-client: it serializes the request via runpod_io, POSTs to /runsync, and extracts the text.
+The model runs on a RunPod GPU worker (see rp_handler.py at the repo root). This class is a
+thin HTTP client: it serializes the request via runpod_io, POSTs to /runsync, extracts text.
 Any HTTP/timeout/shape problem becomes an EngineError so the orchestrator can report it
 per-model without crashing the stream.
 
@@ -9,7 +9,7 @@ Architecture context (thesis):
 -------------------------------
 SP-2 compares four inference scenarios. For the PaliGemma-based scenarios (M1 and M2),
 the model runs on a GPU pod via RunPod Serverless. This engine is the client-side half of
-that bridge; the server-side handler lives in runpod/handler.py at the repository root.
+that bridge; the server-side handler lives in rp_handler.py at the repository root.
 
 The /runsync endpoint (as opposed to /run + /status polling) means the HTTP POST blocks
 until the job is done and the output is embedded in the response body. This keeps the

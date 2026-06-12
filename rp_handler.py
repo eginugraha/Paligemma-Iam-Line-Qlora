@@ -4,9 +4,19 @@ Loads the SP-1 fine-tuned model once on cold start, then for each request decode
 image, runs the supplied prompt through htr_sp1.inference.generate_transcription, and
 returns {"text": ...}. The local backend talks to this via RunPodEngine.
 
-Deploy: build an image from requirements-runpod.txt with this as the entrypoint. The
-generation path requires a GPU, so it is validated on RunPod (manual/integration), not in
-the CPU unit suite. The request/response wire format is unit-tested via htr_sp2.runpod_io.
+Why this file lives at the repository ROOT and is named ``rp_handler.py``:
+    RunPod's "deploy from GitHub" pipeline scans the repo ROOT for a Python file containing a
+    ``runpod.serverless.start(...)`` call to validate the worker (the source of the
+    "Could not find runpod.serverless.start() in your repo" error when the handler is buried
+    in a subdirectory). The official runpod-workers/worker-basic example uses exactly this
+    name and location, so we mirror it. NOTE: the handler must NOT live in a directory named
+    ``runpod/`` — that directory would shadow the installed ``runpod`` SDK as a namespace
+    package and break ``import runpod``.
+
+Deploy: the repo-root Dockerfile builds an image from requirements-runpod.txt with this file
+as the entrypoint (``python -u rp_handler.py``). The generation path requires a GPU, so it is
+validated on RunPod (manual/integration), not in the CPU unit suite. The request/response
+wire format is unit-tested via htr_sp2.runpod_io.
 """
 from __future__ import annotations
 
@@ -63,10 +73,9 @@ def handler(event: dict) -> dict:
     return {"text": text}
 
 
-# RunPod entrypoint — called at MODULE level (not inside an `if __name__ == "__main__"`
-# guard) on purpose. RunPod's GitHub handler-discovery scans the repo for a top-level
-# `runpod.serverless.start(...)` call, and its managed worker runtime expects start() to run
-# when the handler module is imported. The Dockerfile's `python runpod/handler.py` reaches
-# this same line, so the container entrypoint is unchanged. This module is never imported by
-# the CPU test suite (it needs torch/runpod on a GPU), so running start() on import is safe.
-runpod.serverless.start({"handler": handler})
+# RunPod entrypoint. Guarded by `if __name__ == "__main__"` to match the official
+# runpod-workers/worker-basic example; the Dockerfile runs this file directly
+# (`python -u rp_handler.py`), so __name__ == "__main__" and start() fires. The repo scanner
+# detects the handler statically from the `runpod.serverless.start(...)` text below.
+if __name__ == "__main__":
+    runpod.serverless.start({"handler": handler})

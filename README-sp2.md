@@ -35,9 +35,11 @@ gitignored `.env` at the repo root — see `.env.example`.
 
 ## Deploy the RunPod worker
 
-`runpod/handler.py` is the Serverless entrypoint. Build an image from
-`requirements-runpod.txt`, set `HTR_ADAPTER_ID` (the trained LoRA adapter repo/path), and point
-the endpoint at `handler.handler`. The base model is the fixed `htr_sp1.config.BASE_MODEL_ID`,
+`rp_handler.py` (repo root) is the Serverless entrypoint — kept at the root, and NOT inside a
+`runpod/` directory (which would shadow the `runpod` SDK), so RunPod's deploy-from-GitHub
+scanner can find the `runpod.serverless.start(...)` call. Build the root `Dockerfile` from
+`requirements-runpod.txt` and set `HTR_ADAPTER_ID` (the trained LoRA adapter repo/path). The
+base model is the fixed `htr_sp1.config.BASE_MODEL_ID`,
 loaded at the precision in `HTR_BASE_PRECISION` (default `4bit` — lightest VRAM, reproduces the
 baseline; `bf16`/`fp32` also available). The wire format is in `htr_sp2.runpod_io`.
 
