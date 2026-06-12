@@ -53,7 +53,7 @@ Corrector **sudah dirancang konservatif** — pipeline per kata:
 | M3 RAG(M1) | 21.87 | 38.13 | 0.36s |
 | M4 RAG(M2) | 22.33 | 40.52 | 0.38s |
 
-> Catatan: CER 20.49% mendekati hasil training SP-1 (CER 17.4%); selisih ~3pt wajar dari kuantisasi 4bit saat serving. Jadi modelnya sehat — masalahnya murni di lapisan koreksi RAG.
+> Catatan: CER 20.49% mendekati baseline M1 hasil training SP-1 (**CER 17.37%** pada 2.915 sampel — lihat laporan eval awal: [`docs/sp1-initial-eval-2026-06-13.md`](./sp1-initial-eval-2026-06-13.md)). **Kedua eval memakai konfigurasi presisi yang sama (base-4bit + adapter)**, jadi selisih ~3pt **bukan** biaya kuantisasi melainkan **varians sampel kecil** (50 vs 2.915) — diperkirakan konvergen ke ~17.37% saat `--limit 200`. Jadi modelnya sehat — masalahnya murni di lapisan koreksi RAG.
 
 ### 2b. Efek koreksi RAG (M1 → M3, per kata/sampel)
 
@@ -184,4 +184,5 @@ python scripts/tune_sp3.py --pairs val_m1_predictions.json --out tune_sp3.json
 | Logika tuning ambang | `src/htr_sp3/tune.py` → `tune_threshold` |
 | CLI tuning | `scripts/tune_sp3.py` |
 | Data eval | tabel `eval_result` / `eval_run` di Postgres (`eval_run 3`) |
+| **Laporan eval awal (baseline M1 17.37%)** | [`docs/sp1-initial-eval-2026-06-13.md`](./sp1-initial-eval-2026-06-13.md) |
 | Memori terkait | `first-real-eval-results.md`, `sp3-rag-pgvector.md`, `runpod-serverless-deploy.md` |
