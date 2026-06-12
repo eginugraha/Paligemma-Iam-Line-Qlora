@@ -1,23 +1,9 @@
-"""RunPod Serverless handler — runs on a GPU worker, NOT on the local backend.
+"""RunPod Serverless handler — runs on a GPU worker.
 
-Loads the SP-1 fine-tuned model once on cold start, then for each request decodes the
-image, runs the supplied prompt through htr_sp1.inference.generate_transcription, and
-returns {"text": ...}. The local backend talks to this via RunPodEngine.
-
-Why this file lives at the repository ROOT and is named ``handler.py`` with a MODULE-LEVEL
-``runpod.serverless.start(...)`` (no ``if __name__ == "__main__"`` guard):
-    RunPod's "deploy from GitHub" pipeline scans the repo ROOT for a Python file containing a
-    module-body ``runpod.serverless.start(...)`` call to validate the worker (the source of
-    the "Could not find runpod.serverless.start() in your repo" error). Burying the handler in
-    a subdirectory, OR wrapping the call in a ``__main__`` guard, both hide it from that
-    scanner. NOTE: the handler must NOT live in a directory named ``runpod/`` — that directory
-    would shadow the installed ``runpod`` SDK as a namespace package and break ``import
-    runpod``.
-
-Deploy: the repo-root Dockerfile builds an image from requirements-runpod.txt with this file
-as the entrypoint (``python -u handler.py``). The generation path requires a GPU, so it is
-validated on RunPod (manual/integration), not in the CPU unit suite. The request/response
-wire format is unit-tested via htr_sp2.runpod_io.
+Loads the SP-1 fine-tuned model once on cold start, then transcribes each request's image
+with the given prompt and returns {"text": ...}. The local backend talks to this via
+RunPodEngine; the wire format is in htr_sp2.runpod_io. Entry point: `python -u handler.py`
+(see the repo-root Dockerfile).
 """
 from __future__ import annotations
 
@@ -25,50 +11,28 @@ import os
 
 import runpod
 
-# NOTE: the heavy app imports (htr_sp1 / htr_sp2, which pull in torch, transformers, PIL …)
-# are deliberately NOT imported at module level — they live inside the functions below. This
-# keeps the module importable with only the `runpod` SDK present, so RunPod's
-# deploy-from-GitHub validation can reach the module-level runpod.serverless.start() call
-# even if it imports this file in an environment without the model stack installed.
+from htr_sp1.inference import generate_transcription
+from htr_sp2 import runpod_io
 
-# Loaded lazily on first request and cached for the worker's lifetime (avoids reloading
-# the 3B model on every call).
+# Cached for the worker's lifetime so the 3B model is loaded only on the first request.
 _MODEL = None
 _PROCESSOR = None
 
 
 def _load_model():
-    """Load the SP-1 base + LoRA adapter once, at the configured precision.
-
-    Reuses `htr_sp1.model.load_eval_model` — the exact, tested loader used for evaluation — so the
-    served model matches the reported numbers and the merge/precision logic lives in ONE place.
-
-    The base PaliGemma (`config.BASE_MODEL_ID`, a fixed thesis design constant) is downloaded from
-    the Hub and quantized in-memory; no merged model is needed. Precision is set by env
-    `HTR_BASE_PRECISION`:
-      - "4bit" (default): QLoRA config — lightest VRAM (~4 GB), reproduces the baseline numbers.
-                          Requires a CUDA GPU (bitsandbytes); the RunPod worker always has one.
-      - "bf16" / "fp32" : full-precision base (heavier; use if you want zero precision compromise).
-
-    `HTR_ADAPTER_ID` is the trained adapter (Hub repo or local path). Imports are local so the
-    module stays cheap to import (and CPU-only tooling never needs torch/bitsandbytes).
-    """
+    """Load the SP-1 base + LoRA adapter once, at HTR_BASE_PRECISION (default 4bit)."""
     global _MODEL, _PROCESSOR
     if _MODEL is None:
         from htr_sp1.model import load_eval_model
 
-        adapter_id = os.environ["HTR_ADAPTER_ID"]                 # HF repo or local LoRA adapter
+        adapter_id = os.environ["HTR_ADAPTER_ID"]
         base_precision = os.environ.get("HTR_BASE_PRECISION", "4bit")
         _MODEL, _PROCESSOR = load_eval_model(adapter_id, base_precision=base_precision)
     return _MODEL, _PROCESSOR
 
 
 def handler(event: dict) -> dict:
-    """RunPod entrypoint: {"input": {image_b64, prompt, max_new_tokens}} -> {"text": ...}."""
-    # Imported here (not at module top) so importing this module needs only the runpod SDK.
-    from htr_sp1.inference import generate_transcription
-    from htr_sp2 import runpod_io
-
+    """{"input": {image_b64, prompt, max_new_tokens}} -> {"text": ...}."""
     args = runpod_io.parse_input(event)
     model, processor = _load_model()
     text = generate_transcription(
@@ -81,12 +45,4 @@ def handler(event: dict) -> dict:
     return {"text": text}
 
 
-# RunPod entrypoint — called at MODULE level with NO `if __name__ == "__main__"` guard, to
-# exactly match every example in the RunPod handler-functions docs
-# (https://docs.runpod.io/serverless/workers/handler-functions). RunPod's deploy-from-GitHub
-# scanner looks for this call in the module body; wrapping it in a __main__ guard hides it and
-# triggers "Could not find runpod.serverless.start() in your repo". The Dockerfile runs this
-# file directly (`python -u rp_handler.py`), so start() fires the same way at container boot.
-# This module is never imported by the CPU test suite (it needs torch/runpod on a GPU), so
-# running start() on import is safe.
 runpod.serverless.start({"handler": handler})
