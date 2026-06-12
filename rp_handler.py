@@ -73,9 +73,12 @@ def handler(event: dict) -> dict:
     return {"text": text}
 
 
-# RunPod entrypoint. Guarded by `if __name__ == "__main__"` to match the official
-# runpod-workers/worker-basic example; the Dockerfile runs this file directly
-# (`python -u rp_handler.py`), so __name__ == "__main__" and start() fires. The repo scanner
-# detects the handler statically from the `runpod.serverless.start(...)` text below.
-if __name__ == "__main__":
-    runpod.serverless.start({"handler": handler})
+# RunPod entrypoint — called at MODULE level with NO `if __name__ == "__main__"` guard, to
+# exactly match every example in the RunPod handler-functions docs
+# (https://docs.runpod.io/serverless/workers/handler-functions). RunPod's deploy-from-GitHub
+# scanner looks for this call in the module body; wrapping it in a __main__ guard hides it and
+# triggers "Could not find runpod.serverless.start() in your repo". The Dockerfile runs this
+# file directly (`python -u rp_handler.py`), so start() fires the same way at container boot.
+# This module is never imported by the CPU test suite (it needs torch/runpod on a GPU), so
+# running start() on import is safe.
+runpod.serverless.start({"handler": handler})
