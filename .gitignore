@@ -10,3 +10,7 @@ checkpoints/
 
 # Superpowers visual brainstorm scratch dir
 .superpowers/
+
+# Local-only docker compose override (publishes ports + local CORS/API base).
+# MUST NOT reach the server — compose auto-merges it and would break production.
+docker-compose.override.yml
