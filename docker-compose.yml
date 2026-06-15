@@ -44,7 +44,7 @@ services:
       retries: 3
       start_period: 10s
     networks:
-      - proxy
+      - web-net
 
   frontend:
     build:
@@ -65,12 +65,8 @@ services:
     depends_on:
       - backend
     networks:
-      - proxy
+      - web-net
 
 networks:
-  # The shared network with the nginx-proxy container. Declared external so compose does NOT
-  # create/own it — it must already exist (see prerequisites). Override the name with
-  # PROXY_NETWORK in the environment if your proxy uses a different network.
-  proxy:
-    external: true
-    name: ${PROXY_NETWORK:-proxy}
+  web-net:
+    driver: bridge
