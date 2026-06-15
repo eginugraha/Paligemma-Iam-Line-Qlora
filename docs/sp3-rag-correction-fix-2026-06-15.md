@@ -154,9 +154,11 @@ sehingga sangat sedikit koreksi yang menyala; yang menyala rata-rata netral/sedi
 100 sampel validation ini, koreksi sejati "salah-eja → kata nyata" terlalu jarang untuk
 menghasilkan penurunan CER bersih. Jadi koreksi ≈ identitas → CER ≈ baseline.
 
-**Rekomendasi konfigurasi:**
-- Untuk angka final Bab 4, sajikan M3/M4 dengan gerbang Opsi B. Set `DEFAULT_THRESHOLD` rendah
-  (efektif ≈ no-op) — atau laporkan M3/M4 ≈ M1/M2 (tidak lagi lebih buruk).
+**Rekomendasi konfigurasi (diterapkan):**
+- `DEFAULT_THRESHOLD` di-set **0.15** (`src/htr_sp3/config.py`). Best teknis adalah T=0.0, tapi
+  0.15 masih ≈baseline (CER 14.37) sambil membiarkan sedikit koreksi menyala — sehingga M3/M4
+  tidak byte-identik dengan M1/M2 di tabel komparasi, dengan biaya akurasi ~nol.
+- Untuk angka final Bab 4, sajikan M3/M4 dengan gerbang Opsi B + threshold 0.15.
 - Penegasan thesis: RAG koreksi pada setup ini **aman tetapi tidak membantu**.
 
 **Kemungkinan lanjutan (opsional, di luar scope):** keuntungan bersih kemungkinan butuh corrector

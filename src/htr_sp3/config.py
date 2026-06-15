@@ -35,9 +35,11 @@ VECTOR_DIM = 512
 K_NEIGHBORS = 5
 
 # Default correction gate: an OOV word is replaced only if its best candidate's normalized
-# Levenshtein distance is <= this. 0.34 ~= "at most ~1 edit per 3 characters". `tune.py`
-# overrides this with the value that minimizes validation CER.
-DEFAULT_THRESHOLD = 0.34
+# Levenshtein distance is <= this. Tuned on 100 IAM-validation M1 predictions with the Option B
+# (train ∪ English) gate: CER is ≈flat for T<=0.15 (best is technically T=0.0). We use 0.15 — it
+# stays at baseline accuracy while still letting a few genuine corrections fire, so M3/M4 are not
+# byte-identical to M1/M2. See docs/sp3-rag-correction-fix-2026-06-15.md and reports/tune_sp3_english.json.
+DEFAULT_THRESHOLD = 0.15
 
 # --- Storage ----------------------------------------------------------------------------
 
