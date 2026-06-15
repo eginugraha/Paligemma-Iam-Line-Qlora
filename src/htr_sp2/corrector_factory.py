@@ -35,16 +35,21 @@ def get_corrector():
         from htr_sp1 import data
         from htr_sp3 import config as sp3config
         from htr_sp3.corrector import RagCorrector
+        from htr_sp3.english_words import load_english_words
         from htr_sp3.store import PgVectorStore
-        from htr_sp3.vocab import build_vocabulary
+        from htr_sp3.vocab import build_gate_vocabulary
 
-        # Vocabulary = the exact-match gate (valid words are left untouched). Train split only,
-        # matching scripts/ingest_sp3.py (anti-leakage). This is the only heavy step.
-        vocab = build_vocabulary(data.load_iam_splits()["train"])
+        # Gate = IAM-train words UNION a general English wordlist (Option B). Widening only the
+        # gate (not the candidate store) stops valid English words absent from IAM-train from
+        # being treated as OOV and over-corrected — see docs/sp3-rag-correction-investigation-*.
+        # The candidate STORE stays train-only (PgVectorStore populated by ingest_sp3.py), so
+        # this introduces no leakage: a general dictionary is external knowledge, not test labels.
+        vocab = build_gate_vocabulary(data.load_iam_splits()["train"], load_english_words())
         _CORRECTOR = RagCorrector(
             store=PgVectorStore(),
             vocab=vocab,
             threshold=sp3config.DEFAULT_THRESHOLD,
+            possessive_aware=True,  # leave possessives/contractions of real words untouched
         )
         _BUILT = True
 

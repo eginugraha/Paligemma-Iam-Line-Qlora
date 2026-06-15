@@ -113,3 +113,43 @@ def test_levenshtein_rerank_overrides_cosine_nearest():
     )
     assert log[0]["from"] == "handwrit"
     assert log[0]["to"] == "handwrite"
+
+
+# ---------------------------------------------------------------------------
+# possessive-aware gate (Option B): the tokenizer keeps "doll's" as ONE word, so a
+# possessive of a perfectly valid noun looks OOV and gets "corrected" (doll's→dollars,
+# the headline failure in the investigation report §4). When possessive_aware=True the
+# gate also accepts a word whose pre-apostrophe stem is valid, leaving possessives and
+# contractions of real words untouched. Default stays False (backward compatible).
+# ---------------------------------------------------------------------------
+
+def _possessive_store():
+    """Store whose only candidate is 'dollars' — the wrong target for 'doll's'."""
+    store = InMemoryVectorStore()
+    store.add_many([(w, vectorize.word_to_vector(w)) for w in ["dollars"]])
+    return store
+
+
+def test_possessive_of_valid_word_left_alone_when_possessive_aware():
+    # Gate has the stem "doll"; "doll's" must survive even though "dollars" is in range.
+    c = RagCorrector(store=_possessive_store(), vocab={"dollars", "doll"},
+                     threshold=0.34, possessive_aware=True)
+    text, log = c.correct("doll's")
+    assert text == "doll's"
+    assert log == []
+
+
+def test_possessive_is_corrected_when_not_possessive_aware():
+    # Default behavior (possessive_aware=False): "doll's" is OOV -> corrected to "dollars".
+    c = RagCorrector(store=_possessive_store(), vocab={"dollars", "doll"}, threshold=0.34)
+    text, _ = c.correct("doll's")
+    assert text == "dollars"
+
+
+def test_possessive_aware_still_corrects_when_stem_invalid():
+    # "xqz's" has no valid stem -> possessive_aware must NOT shield it; normal path applies.
+    # ("dollars" is too far from "xqz's", so it ends up unchanged via the threshold, not the gate.)
+    c = RagCorrector(store=_possessive_store(), vocab={"dollars", "doll"},
+                     threshold=0.34, possessive_aware=True)
+    text, _ = c.correct("xqz's")
+    assert text == "xqz's"

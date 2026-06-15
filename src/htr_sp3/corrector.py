@@ -57,16 +57,36 @@ def _match_case(original: str, replacement: str) -> str:
 class RagCorrector:
     """Correct OCR text using vocabulary retrieval + edit-distance rerank."""
 
-    def __init__(self, store: VectorStore, vocab: Set[str], threshold: float = config.DEFAULT_THRESHOLD) -> None:
+    def __init__(self, store: VectorStore, vocab: Set[str], threshold: float = config.DEFAULT_THRESHOLD,
+                 possessive_aware: bool = False) -> None:
         """
         Args:
             store:     populated VectorStore (in-memory for tests, pgvector in production).
             vocab:     set of valid lowercased words for the exact-match gate.
             threshold: max normalized Levenshtein distance to accept a correction (0..1).
+            possessive_aware: when True, a word is also gated-valid if its pre-apostrophe stem is
+                in vocab — so possessives/contractions of real words ("doll's", "don't") are left
+                alone. The tokenizer keeps "doll's" as one word, so without this it looks OOV and
+                gets "corrected" (doll's -> dollars). Default False (original behavior).
         """
         self._store = store
         self._vocab = vocab
         self._threshold = threshold
+        self._possessive_aware = possessive_aware
+
+    def _in_gate(self, lower: str) -> bool:
+        """True if *lower* is a valid (untouchable) word per the gate.
+
+        A word is valid if it is in vocab directly, or — when possessive_aware — if the part
+        before its first apostrophe is in vocab (so "doll's"->"doll", "don't"->"don" pass).
+        """
+        if lower in self._vocab:
+            return True
+        if self._possessive_aware and "'" in lower:
+            stem = lower.split("'", 1)[0]
+            if stem and stem in self._vocab:
+                return True
+        return False
 
     def correct(self, text: str) -> Tuple[str, List[Dict[str, object]]]:
         """Return (corrected_text, log) where log lists {from, to, distance} per replacement."""
@@ -80,8 +100,8 @@ class RagCorrector:
                 continue
 
             lower = chunk.lower()
-            # Already a valid word -> keep it (no correction).
-            if lower in self._vocab:
+            # Already a valid word (or a possessive/contraction of one) -> keep it (no correction).
+            if self._in_gate(lower):
                 out.append(chunk)
                 continue
 
