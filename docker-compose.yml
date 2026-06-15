@@ -30,11 +30,9 @@ services:
       # --- nginx-proxy routing ---
       VIRTUAL_HOST: htr-api.eginugraha.com
       VIRTUAL_PORT: "8000"
-      # TLS via acme-companion (remove these two lines if you terminate TLS elsewhere):
-      LETSENCRYPT_HOST: htr-api.eginugraha.com
       # --- app overrides (win over .env) ---
       # Only allow the browser frontend's origin to call the API (default in code is "*").
-      HTR_CORS_ORIGINS: https://htr.eginugraha.com
+      HTR_CORS_ORIGINS: http://htr.eginugraha.com
     expose:
       - "8000"           # published to the proxy network only, not the host
     healthcheck:
@@ -52,14 +50,13 @@ services:
       dockerfile: Dockerfile
       args:
         # Baked into the client bundle at build time (browser calls the backend directly).
-        VITE_API_BASE: https://htr-api.eginugraha.com
+        VITE_API_BASE: http://htr-api.eginugraha.com
     image: htr-frontend:latest
     container_name: htr-frontend
     restart: unless-stopped
     environment:
       VIRTUAL_HOST: htr.eginugraha.com
       VIRTUAL_PORT: "3000"
-      LETSENCRYPT_HOST: htr.eginugraha.com
     expose:
       - "3000"
     depends_on:
