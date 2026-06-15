@@ -1,0 +1,25 @@
+# Backend image build context (Dockerfile.backend). Only requirements-backend.txt, src/, and
+# data/ are COPYed; everything else just bloats/slows the context, so exclude it.
+.git
+.gitignore
+frontend
+node_modules
+__pycache__
+**/__pycache__
+*.pyc
+.pytest_cache
+.venv
+.env
+.env.*
+.DS_Store
+notebooks
+docs
+reports
+tests
+conftest.py
+pytest.ini
+# Model weights must never enter the API image (it has no torch and never loads them).
+*.safetensors
+*.gguf
+checkpoints
+outputs

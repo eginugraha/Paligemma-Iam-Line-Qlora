@@ -10,6 +10,13 @@ jiwer==3.0.4
 # Pinned to 7.2.x which is the latest stable series as of mid-2026 and supports
 # presigned URLs via timedelta (required by objectstore.py).
 minio==7.2.7
+# SP-5 metadata store (eval runs / uploads). psycopg v3 is imported lazily by htr_sp5.store
+# (and htr_sp3.store), so the /v1/eval/* and /v1/uploads endpoints — which the frontend
+# dashboard & history pages call — need it installed at runtime.
+psycopg[binary]>=3.1
+# Lets config.py read HTR_* from a local .env when present (containers inject env directly,
+# but this keeps `uvicorn ... --app-dir src` behaving the same locally).
+python-dotenv>=1.0
 # Dev / test only:
 pytest==8.2.2
 pytest-httpx==0.30.0

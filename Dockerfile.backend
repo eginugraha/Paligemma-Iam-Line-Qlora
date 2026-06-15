@@ -1,0 +1,31 @@
+# SP-2 FastAPI backend image (the "API" tier — NOT the GPU engine; that is the root Dockerfile
+# used by RunPod). This container is lean: it talks to the model over HTTP via RunPodEngine, so
+# it needs no torch/transformers — just FastAPI + a Postgres driver + the MinIO client.
+#
+# Build context = repo root (so it can COPY src/ and data/). Served behind nginx-proxy via the
+# docker-compose VIRTUAL_HOST=htr-api.eginugraha.com on port 8000.
+FROM python:3.12-slim
+
+# Unbuffered logs (stream line-by-line) + no .pyc files. PYTHONPATH=/app/src mirrors the local
+# `uvicorn ... --app-dir src` convention so `from htr_sp2 ...` resolves without `pip install -e`.
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONPATH=/app/src
+
+WORKDIR /app
+
+# Deps first, in their own layer, so code-only changes don't bust the pip cache.
+COPY requirements-backend.txt .
+RUN pip install --no-cache-dir -r requirements-backend.txt
+
+# Application packages (htr_sp2 = API/orchestrator, htr_sp3 = corrector, htr_sp5 = eval/store).
+COPY src/ ./src/
+# Vendored English wordlist — only read when RAG (HTR_ENABLE_RAG=1) is on, but cheap to include
+# so RAG can be enabled later without changing the image layout.
+COPY data/ ./data/
+
+# FastAPI listens on 8000; nginx-proxy routes htr-api.eginugraha.com -> here (VIRTUAL_PORT=8000).
+EXPOSE 8000
+
+# 0.0.0.0 so the port is reachable from outside the container. --app-dir src matches PYTHONPATH.
+CMD ["uvicorn", "htr_sp2.api:app", "--app-dir", "src", "--host", "0.0.0.0", "--port", "8000"]

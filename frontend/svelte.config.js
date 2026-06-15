@@ -1,4 +1,7 @@
-import adapter from '@sveltejs/adapter-auto';
+// adapter-node: builds a self-contained Node server (build/index.js) so the app can run in a
+// plain Docker container behind the nginx-proxy (VIRTUAL_HOST). adapter-auto only targets
+// managed hosts (Vercel/Netlify/…) and produces nothing runnable in a generic container.
+import adapter from '@sveltejs/adapter-node';
 import { vitePreprocess } from '@sveltejs/vite-plugin-svelte';
 
 /** @type {import('@sveltejs/kit').Config} */

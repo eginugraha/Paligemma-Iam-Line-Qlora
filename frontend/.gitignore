@@ -1,7 +1,8 @@
 node_modules/
 /build
 /.svelte-kit
-/package-lock.json
+# package-lock.json is COMMITTED on purpose: the Docker image builds with `npm ci`, which
+# needs the lockfile present in a fresh clone for reproducible installs.
 .env
 .env.*
 !.env.example

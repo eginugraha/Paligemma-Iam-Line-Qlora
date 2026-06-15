@@ -1,0 +1,11 @@
+# Keep the build context small and avoid copying host artifacts into the image.
+node_modules
+build
+.svelte-kit
+.env
+.env.*
+.DS_Store
+# Tests / coverage are not needed to build the production bundle.
+**/*.test.ts
+**/*.spec.ts
+coverage

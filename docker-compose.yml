@@ -1,0 +1,76 @@
+# Docker Compose for the HTR web tier: SP-2 backend API + SP-4/SP-5 SvelteKit frontend.
+#
+# Both services sit behind an EXISTING nginx-proxy (nginxproxy/nginx-proxy, the VIRTUAL_HOST
+# pattern) that auto-discovers containers over the Docker socket and routes by hostname. The
+# proxy (and optional acme-companion for TLS) run separately and share the external `proxy`
+# network declared at the bottom of this file.
+#
+# Prerequisites on the host:
+#   1. docker network create proxy            # or set PROXY_NETWORK to your proxy's network
+#   2. an nginx-proxy container attached to that same network
+#   3. a `.env` next to this file with the backend secrets (see .env.example)
+#
+# Bring up:  docker compose up -d --build
+#
+# NOTE on DNS from inside containers: HTR_PG_DSN / HTR_MINIO_ENDPOINT in .env must point to
+# host-reachable addresses — NOT "localhost" (that resolves to the container itself). Use the
+# real host IP/domain, or `host.docker.internal` on Docker Desktop.
+
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+    image: htr-backend:latest
+    container_name: htr-backend
+    restart: unless-stopped
+    # App config & secrets: HTR_ENGINE, HTR_RUNPOD_*, HTR_PG_DSN, HTR_MINIO_*, etc.
+    env_file: .env
+    environment:
+      # --- nginx-proxy routing ---
+      VIRTUAL_HOST: htr-api.eginugraha.com
+      VIRTUAL_PORT: "8000"
+      # TLS via acme-companion (remove these two lines if you terminate TLS elsewhere):
+      # LETSENCRYPT_HOST: htr-api.eginugraha.com
+      # --- app overrides (win over .env) ---
+      # Only allow the browser frontend's origin to call the API (default in code is "*").
+      HTR_CORS_ORIGINS: https://htr.eginugraha.com
+    expose:
+      - "8000"           # published to the proxy network only, not the host
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8000/health').status==200 else 1)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    networks:
+      - proxy
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        # Baked into the client bundle at build time (browser calls the backend directly).
+        VITE_API_BASE: https://htr-api.eginugraha.com
+    image: htr-frontend:latest
+    container_name: htr-frontend
+    restart: unless-stopped
+    environment:
+      VIRTUAL_HOST: htr.eginugraha.com
+      VIRTUAL_PORT: "3000"
+      # LETSENCRYPT_HOST: htr.eginugraha.com
+    expose:
+      - "3000"
+    depends_on:
+      - backend
+    networks:
+      - proxy
+
+networks:
+  # The shared network with the nginx-proxy container. Declared external so compose does NOT
+  # create/own it — it must already exist (see prerequisites). Override the name with
+  # PROXY_NETWORK in the environment if your proxy uses a different network.
+  proxy:
+    external: true
+    name: ${PROXY_NETWORK:-proxy}
