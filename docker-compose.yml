@@ -32,7 +32,7 @@ services:
       VIRTUAL_PORT: "8000"
       # --- app overrides (win over .env) ---
       # Only allow the browser frontend's origin to call the API (default in code is "*").
-      HTR_CORS_ORIGINS: http://htr.eginugraha.com
+      HTR_CORS_ORIGINS: https://htr.eginugraha.com
     ports:
       - 8000:8000
     healthcheck:
@@ -50,7 +50,7 @@ services:
       dockerfile: Dockerfile
       args:
         # Baked into the client bundle at build time (browser calls the backend directly).
-        VITE_API_BASE: http://htr-api.eginugraha.com
+        VITE_API_BASE: https://htr-api.eginugraha.com
     image: htr-frontend:latest
     container_name: htr-frontend
     restart: unless-stopped
@@ -66,4 +66,5 @@ services:
 
 networks:
   web-net:
-    driver: bridge
+    external: true
+    name: web-net
