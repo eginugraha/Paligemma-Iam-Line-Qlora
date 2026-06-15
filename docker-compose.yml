@@ -41,8 +41,6 @@ services:
       timeout: 5s
       retries: 3
       start_period: 10s
-    networks:
-      - web-net
 
   frontend:
     build:
@@ -61,10 +59,3 @@ services:
       - 3000:3000
     depends_on:
       - backend
-    networks:
-      - web-net
-
-networks:
-  web-net:
-    external: true
-    name: web-net
