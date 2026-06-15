@@ -31,7 +31,7 @@ services:
       VIRTUAL_HOST: htr-api.eginugraha.com
       VIRTUAL_PORT: "8000"
       # TLS via acme-companion (remove these two lines if you terminate TLS elsewhere):
-      # LETSENCRYPT_HOST: htr-api.eginugraha.com
+      LETSENCRYPT_HOST: htr-api.eginugraha.com
       # --- app overrides (win over .env) ---
       # Only allow the browser frontend's origin to call the API (default in code is "*").
       HTR_CORS_ORIGINS: https://htr.eginugraha.com
@@ -59,7 +59,7 @@ services:
     environment:
       VIRTUAL_HOST: htr.eginugraha.com
       VIRTUAL_PORT: "3000"
-      # LETSENCRYPT_HOST: htr.eginugraha.com
+      LETSENCRYPT_HOST: htr.eginugraha.com
     expose:
       - "3000"
     depends_on:
