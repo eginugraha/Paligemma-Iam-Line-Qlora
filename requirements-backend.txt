@@ -17,6 +17,12 @@ psycopg[binary]>=3.1
 # Lets config.py read HTR_* from a local .env when present (containers inject env directly,
 # but this keeps `uvicorn ... --app-dir src` behaving the same locally).
 python-dotenv>=1.0
+# QUICK FIX (RAG): when HTR_ENABLE_RAG=1, htr_sp2.corrector_factory builds the gate vocabulary
+# via htr_sp1.data.load_iam_splits(), which imports `datasets` and downloads the IAM-train split
+# from the Hub on first use. Pinned to match requirements.txt (SP-1 stack). NOTE: this is the
+# fast path, not the lean one — the proper fix is to read the train words back from the pgvector
+# store instead of re-downloading the dataset at serve time (no `datasets` dep on the API tier).
+datasets==2.20.0
 # Dev / test only:
 pytest==8.2.2
 pytest-httpx==0.30.0
