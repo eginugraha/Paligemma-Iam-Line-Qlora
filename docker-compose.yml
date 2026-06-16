@@ -32,7 +32,7 @@ services:
       VIRTUAL_PORT: "8000"
       # --- app overrides (win over .env) ---
       # Only allow the browser frontend's origin to call the API (default in code is "*").
-      HTR_CORS_ORIGINS: https://htr.eginugraha.com
+      HTR_CORS_ORIGINS: "*"
     ports:
       - 8000:8000
     healthcheck:
@@ -41,6 +41,8 @@ services:
       timeout: 5s
       retries: 3
       start_period: 10s
+    networks:
+      - eginugraha-net
 
   frontend:
     build:
@@ -59,3 +61,9 @@ services:
       - 3000:3000
     depends_on:
       - backend
+    networks:
+      - eginugraha-net
+
+networks:
+  eginugraha-net:
+    external: true
